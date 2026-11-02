@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#3269ed">
+  <title>VA Chat — школьный мессенджер</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <section class="auth-card">
+      <div class="logo">💬</div>
+      <h1>VA Chat</h1>
+      <p class="subtitle">Общайся со своим классом</p>
+
+      <div class="tabs">
+        <button id="loginTab" class="tab active" type="button">
+          Вход
+        </button>
+        <button id="registerTab" class="tab" type="button">
+          Регистрация
+        </button>
+      </div>
+
+      <form id="authForm">
+        <div class="field">
+          <label for="role">Кто ты?</label>
+          <select id="role">
+            <option value="student">Ученик</option>
+            <option value="teacher">Учитель</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="username">Имя пользователя</label>
+          <input id="username" required minlength="3" maxlength="30"
+            pattern="[A-Za-zА-Яа-яЁё0-9_-]+"
+            placeholder="Например, Ivan5" autocomplete="username">
+          <small>Без пробелов. Можно использовать буквы и цифры.</small>
+        </div>
+
+        <div class="field">
+          <label for="password">Пароль аккаунта</label>
+          <input id="password" type="password" required minlength="6"
+            maxlength="72" placeholder="Минимум 6 символов"
+            autocomplete="current-password">
+        </div>
+
+        <div class="field">
+          <label for="className">Название класса</label>
+          <input id="className" required maxlength="30"
+            placeholder="Например, 5А" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label for="classPassword">Пароль класса</label>
+          <input id="classPassword" type="password" required
+            minlength="6" maxlength="128"
+            placeholder="Пароль, который сообщил учитель"
+            autocomplete="off">
+        </div>
+
+        <div id="teacherCodeField" class="field hidden">
+          <label for="teacherCode">Секретный код учителя</label>
+          <input id="teacherCode" type="password"
+            autocomplete="off" placeholder="Код для регистрации учителя">
+        </div>
+
+        <p id="classHint" class="hint"></p>
+
+        <button class="submit-btn" type="submit" id="submitBtn">
+          Войти
+        </button>
+        <p id="message" class="message" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="script.js"></script>
+</body>
+</html>
