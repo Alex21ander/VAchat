@@ -3,7 +3,14 @@ const SUPABASE_KEY = "sb_publishable_1Ic64s3vJf3Q3eKr1w8fSQ_6oE_23gy";
 
 const db = window.supabase.createClient(
   SUPABASE_URL,
-  SUPABASE_KEY
+  SUPABASE_KEY,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
+  }
 );
 
 const app = document.getElementById("app");
@@ -131,7 +138,7 @@ authForm.addEventListener("submit", async (event) => {
 
       if (!authData.session || !authData.user) {
         throw new Error(
-          "Аккаунт создан, но вход ещё не выполнен. Проверь настройки подтверждения Email в Supabase."
+          "Аккаунт создан, но вход ещё не выполнен."
         );
       }
 
@@ -194,6 +201,8 @@ authForm.addEventListener("submit", async (event) => {
 
     currentUser = authData.user;
     currentClass = { id: classId, name: group };
+
+    localStorage.setItem("vachat_class_id", classId);
 
     await showMessenger();
   } catch (error) {
@@ -289,7 +298,7 @@ async function showMessenger() {
     personalTab.classList.add("active");
     heading.replaceChildren(
       makeElement("h2", "", "Личные сообщения"),
-      makeElement("p", "", "Этот раздел подключим следующим этапом.")
+      makeElement("p", "", "Эта потом сделаем.")
     );
     messages.replaceChildren(
       makeElement(
@@ -439,24 +448,16 @@ async function logout() {
   currentClass = null;
   loadingMessages = false;
 
+  localStorage.removeItem("vachat_class_id");
+
   location.reload();
 }
 
 // Восстанавливаем сессию после обновления страницы.
 async function init() {
-  if (
-    !SUPABASE_URL.startsWith("https://") ||
-    SUPABASE_KEY.includes("ВСТАВЬ")
-  ) {
-    showMessage(
-      "Сначала укажи Project URL и publishable key в script.js.",
-      "error"
-    );
-    return;
-  }
-
   try {
     const { data, error } = await db.auth.getSession();
+
     if (error) throw error;
 
     if (!data.session) return;
@@ -471,20 +472,54 @@ async function init() {
 
     if (profileError) throw profileError;
 
-    // При восстановлении сессии сначала проверяем доступ к классу.
-    // Пользователь повторно вводит название и пароль класса,
-    // если у него нет сохранённого идентификатора текущего класса.
+    const savedClassId = localStorage.getItem("vachat_class_id");
+
+    if (savedClassId) {
+      const { data: membership, error: membershipError } = await db
+        .from("class_members")
+        .select("class_id")
+        .eq("class_id", savedClassId)
+        .eq("user_id", currentUser.id)
+        .maybeSingle();
+
+      if (membershipError) throw membershipError;
+
+      if (membership) {
+        const { data: savedClass, error: classError } = await db
+          .from("classes")
+          .select("id, name")
+          .eq("id", savedClassId)
+          .single();
+
+        if (classError) throw classError;
+
+        currentClass = {
+          id: savedClass.id,
+          name: savedClass.name
+        };
+
+        await showMessenger();
+        return;
+      }
+
+      localStorage.removeItem("vachat_class_id");
+    }
+
     app.innerHTML = "";
     app.append(authForm.closest(".auth-card"));
+
     className.value = "";
     classPassword.value = "";
     username.value = profile.username;
     role.value = profile.role;
+
     setMode("login");
+
     showMessage(
-      "Ты вошёл в аккаунт. Введи название класса и пароль, чтобы открыть чат.",
+      "Ты уже вошёл в аккаунт. Введи название класса и пароль, чтобы открыть чат.",
       "success"
     );
+
   } catch (error) {
     showMessage(readableError(error), "error");
   }
