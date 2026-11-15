@@ -477,3 +477,42 @@ button:disabled {
     padding: 0 12px;
   }
 }
+
+.user-identity {
+  margin-left: auto;
+  margin-right: 15px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.create-chat-btn {
+  width: 100%;
+  margin: 10px 0;
+  padding: 11px;
+  border: 1px dashed #8b9bb5;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.create-chat-btn:hover {
+  background: rgba(120, 140, 180, 0.12);
+}
+
+.custom-chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-caption {
+  margin: 12px 0 5px;
+  font-size: 12px;
+  opacity: 0.7;
+}

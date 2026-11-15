@@ -1,3 +1,4 @@
+
 const SUPABASE_URL = "https://zohhimpltawkaflzxdxe.supabase.co";
 const SUPABASE_KEY = "sb_publishable_1Ic64s3vJf3Q3eKr1w8fSQ_6oE_23gy";
 
@@ -30,11 +31,12 @@ const message = document.getElementById("message");
 
 let mode = "login";
 let currentUser = null;
+let currentProfile = null;
 let currentClass = null;
 let realtimeChannel = null;
 let loadingMessages = false;
 
-// Показываем сообщения об ошибках и успехе.
+// Показываем ошибки и сообщения.
 function showMessage(text, type = "") {
   message.textContent = text;
   message.className = "message";
@@ -80,17 +82,16 @@ loginTab.addEventListener("click", () => setMode("login"));
 registerTab.addEventListener("click", () => setMode("register"));
 role.addEventListener("change", () => setMode(mode));
 
-
 function usernameEmail(name) {
-  const username = name.trim().toLowerCase();
+  const normalized = name.trim().toLowerCase();
 
-  if (!/^[a-z0-9_-]{3,24}$/.test(username)) {
+  if (!/^[a-z0-9_-]{3,24}$/.test(normalized)) {
     throw new Error(
       "Имя пользователя: от 3 до 24 символов. Используй английские буквы, цифры, _ или -."
     );
   }
 
-  return username + "@vachat.example.com";
+  return normalized + "@vachat.example.com";
 }
 
 function readableError(error) {
@@ -111,7 +112,7 @@ function readableError(error) {
   return text;
 }
 
-// Регистрация или вход.
+// Регистрация и вход.
 authForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   showMessage("");
@@ -154,6 +155,12 @@ authForm.addEventListener("submit", async (event) => {
       );
 
       if (profileError) throw profileError;
+
+      currentProfile = {
+        username: name,
+        role: selectedRole
+      };
+
     } else {
       const result = await db.auth.signInWithPassword({
         email: usernameEmail(name),
@@ -161,9 +168,9 @@ authForm.addEventListener("submit", async (event) => {
       });
 
       if (result.error) throw result.error;
+
       authData = result.data;
 
-      // Проверяем роль из базы данных, а не только выбор в форме.
       const { data: profile, error: profileError } = await db
         .from("profiles")
         .select("id, username, role")
@@ -176,9 +183,10 @@ authForm.addEventListener("submit", async (event) => {
         await db.auth.signOut();
         throw new Error("Выбрана неверная роль для этого аккаунта.");
       }
+
+      currentProfile = profile;
     }
 
-    // Проверяем пароль класса на сервере и вступаем в класс.
     let classId;
 
     if (mode === "register" && selectedRole === "teacher") {
@@ -189,6 +197,7 @@ authForm.addEventListener("submit", async (event) => {
 
       if (error) throw error;
       classId = data;
+
     } else {
       const { data, error } = await db.rpc("join_class", {
         p_name: group,
@@ -200,11 +209,15 @@ authForm.addEventListener("submit", async (event) => {
     }
 
     currentUser = authData.user;
-    currentClass = { id: classId, name: group };
+    currentClass = {
+      id: classId,
+      name: group
+    };
 
     localStorage.setItem("vachat_class_id", classId);
 
     await showMessenger();
+
   } catch (error) {
     showMessage(readableError(error), "error");
   } finally {
@@ -212,14 +225,18 @@ authForm.addEventListener("submit", async (event) => {
   }
 });
 
-// Безопасное создание элементов с текстом.
+// Создание элементов.
 function makeElement(tag, className, text = "") {
   const el = document.createElement(tag);
+
   if (className) el.className = className;
+
   el.textContent = text;
+
   return el;
 }
 
+// Основной интерфейс.
 async function showMessenger() {
   if (realtimeChannel) {
     await db.removeChannel(realtimeChannel);
@@ -230,40 +247,95 @@ async function showMessenger() {
 
   const shell = makeElement("section", "messenger");
   const topbar = makeElement("header", "topbar");
+
   const brand = makeElement("div", "brand");
   const brandIcon = makeElement("div", "brand-icon", "💬");
+
   const brandText = document.createElement("div");
+
   brandText.append(
     makeElement("h1", "", "VA Chat"),
     makeElement("p", "", "Школьный мессенджер")
   );
+
   brand.append(brandIcon, brandText);
 
-  const logoutBtn = makeElement("button", "secondary-btn", "Выйти");
+  const identity = makeElement(
+    "div",
+    "user-identity",
+    (currentProfile?.username || "Пользователь") +
+    " · " +
+    (currentProfile?.role === "teacher" ? "Учитель" : "Ученик")
+  );
+
+  const logoutBtn = makeElement(
+    "button",
+    "secondary-btn",
+    "Выйти"
+  );
+
   logoutBtn.type = "button";
   logoutBtn.addEventListener("click", logout);
-  topbar.append(brand, logoutBtn);
+
+  topbar.append(brand, identity, logoutBtn);
 
   const tabs = makeElement("div", "chat-tabs");
-  const classTab = makeElement("button", "chat-tab active", "Классный чат");
-  const personalTab = makeElement("button", "chat-tab", "Личные сообщения");
-  classTab.type = personalTab.type = "button";
+
+  const classTab = makeElement(
+    "button",
+    "chat-tab active",
+    "Классный чат"
+  );
+
+  const personalTab = makeElement(
+    "button",
+    "chat-tab",
+    "Личные сообщения"
+  );
+
+  classTab.type = "button";
+  personalTab.type = "button";
+
   tabs.append(classTab, personalTab);
 
   const layout = makeElement("div", "chat-layout");
   const sidebar = makeElement("aside", "sidebar");
-  sidebar.append(makeElement("h2", "", "Мои чаты"));
+
+  const sidebarTitle = makeElement("h2", "", "Мои чаты");
 
   const classItem = makeElement("button", "class-item active");
+
   classItem.type = "button";
+
   classItem.append(
     makeElement("span", "avatar", "К"),
     makeElement("span", "person-name", "Классный чат")
   );
-  sidebar.append(classItem);
+
+  const createChatBtn = makeElement(
+    "button",
+    "create-chat-btn",
+    "+ Создать чат"
+  );
+
+  createChatBtn.type = "button";
+
+  const customChatList = makeElement(
+    "div",
+    "custom-chat-list"
+  );
+
+  sidebar.append(
+    sidebarTitle,
+    classItem,
+    createChatBtn,
+    customChatList
+  );
 
   const panel = makeElement("section", "chat-panel");
+
   const heading = makeElement("header", "chat-heading");
+
   heading.append(
     makeElement("h2", "", currentClass.name),
     makeElement("p", "", "Общий чат класса")
@@ -271,44 +343,79 @@ async function showMessenger() {
 
   const messages = makeElement("div", "chat-messages");
   messages.setAttribute("aria-live", "polite");
-  const status = makeElement("div", "status-line", "Подключение к чату...");
+
+  const status = makeElement(
+    "div",
+    "status-line",
+    "Подключение к чату..."
+  );
 
   const composer = makeElement("form", "composer");
+
   const textarea = makeElement("textarea", "");
   textarea.placeholder = "Напиши сообщение...";
   textarea.maxLength = 2000;
   textarea.required = true;
   textarea.setAttribute("aria-label", "Текст сообщения");
-  const sendBtn = makeElement("button", "send-btn", "Отправить");
+
+  const sendBtn = makeElement(
+    "button",
+    "send-btn",
+    "Отправить"
+  );
+
   sendBtn.type = "submit";
+
   composer.append(textarea, sendBtn);
 
-  panel.append(heading, messages, composer, status);
+  panel.append(
+    heading,
+    messages,
+    composer,
+    status
+  );
+
   layout.append(sidebar, panel);
   shell.append(topbar, tabs, layout);
   app.append(shell);
 
   let activeMode = "class";
   let selectedPerson = null;
+  let selectedGroup = null;
   let memberButtons = [];
+  let customChatButtons = [];
 
-  function setActiveTab(mode) {
-    activeMode = mode;
-    classTab.classList.toggle("active", mode === "class");
-    personalTab.classList.toggle("active", mode === "personal");
+  function setActiveTab(nextMode) {
+    activeMode = nextMode;
+
+    classTab.classList.toggle(
+      "active",
+      nextMode === "class"
+    );
+
+    personalTab.classList.toggle(
+      "active",
+      nextMode === "personal"
+    );
   }
 
   function showEmpty(text) {
-    messages.replaceChildren(makeElement("p", "empty-state", text));
+    messages.replaceChildren(
+      makeElement("p", "empty-state", text)
+    );
   }
 
+  // Загрузка личной переписки.
   async function loadPersonalMessages() {
     if (!selectedPerson) {
-      showEmpty("Выбери одноклассника слева, чтобы начать переписку.");
+      showEmpty(
+        "Выбери одноклассника слева, чтобы начать переписку."
+      );
       return;
     }
 
     status.textContent = "Загружаем переписку...";
+
     try {
       const { data, error } = await db
         .from("private_messages")
@@ -323,94 +430,152 @@ async function showMessenger() {
       if (error) throw error;
 
       const fragment = document.createDocumentFragment();
+
       if (!data.length) {
-        fragment.append(makeElement(
-          "p", "empty-state", "Это начало вашей переписки. Напиши первое сообщение!"
-        ));
+        fragment.append(
+          makeElement(
+            "p",
+            "empty-state",
+            "Это начало вашей переписки. Напиши первое сообщение!"
+          )
+        );
       }
 
       for (const item of data) {
         const bubble = makeElement(
           "article",
-          "chat-message" + (item.sender_id === currentUser.id ? " mine" : "")
+          "chat-message" +
+          (item.sender_id === currentUser.id ? " mine" : "")
         );
+
         bubble.append(
           makeElement("div", "", item.body),
           makeElement(
             "time",
             "message-time",
             new Date(item.created_at).toLocaleString("ru-RU", {
-              hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit"
+              hour: "2-digit",
+              minute: "2-digit",
+              day: "2-digit",
+              month: "2-digit"
             })
           )
         );
+
         fragment.append(bubble);
       }
 
       messages.replaceChildren(fragment);
       messages.scrollTop = messages.scrollHeight;
-      status.textContent = "Личная переписка · " + selectedPerson.username;
+
+      status.textContent =
+        "Личная переписка · " + selectedPerson.username;
+
     } catch (error) {
-      status.textContent = "Не удалось загрузить переписку: " + readableError(error);
+      status.textContent =
+        "Не удалось загрузить переписку: " +
+        readableError(error);
     }
   }
 
+  // Открытие личного чата.
   async function openPersonalChat(person) {
     selectedPerson = person;
+    selectedGroup = null;
+    activeMode = "personal";
+
     for (const button of memberButtons) {
-      button.classList.toggle("active", button.dataset.userId === person.id);
+      button.classList.toggle(
+        "active",
+        button.dataset.userId === person.id
+      );
+    }
+
+    for (const button of customChatButtons) {
+      button.classList.remove("active");
     }
 
     heading.replaceChildren(
       makeElement("h2", "", person.username),
       makeElement("p", "", "Личная переписка")
     );
+
     composer.classList.remove("hidden");
-    textarea.placeholder = "Сообщение для " + person.username + "...";
+
+    textarea.placeholder =
+      "Сообщение для " + person.username + "...";
+
     await loadPersonalMessages();
   }
 
+  // Загрузка одноклассников.
   async function loadClassmates() {
     sidebar.replaceChildren(
       makeElement("h2", "", "Одноклассники")
     );
+
     memberButtons = [];
-    showEmpty("Выбери одноклассника слева, чтобы начать переписку.");
+
+    showEmpty(
+      "Выбери одноклассника слева, чтобы начать переписку."
+    );
 
     try {
-      const { data: memberships, error: membersError } = await db
-        .from("class_members")
-        .select("user_id")
-        .eq("class_id", currentClass.id);
+      const { data: memberships, error: membersError } =
+        await db
+          .from("class_members")
+          .select("user_id")
+          .eq("class_id", currentClass.id);
 
       if (membersError) throw membersError;
 
-      const ids = [...new Set((memberships || [])
-        .map(row => row.user_id)
-        .filter(id => id !== currentUser.id))];
+      const ids = [...new Set(
+        (memberships || [])
+          .map(row => row.user_id)
+          .filter(id => id !== currentUser.id)
+      )];
 
       if (!ids.length) {
         showEmpty("Пока в классе нет других участников.");
         return;
       }
 
-      const { data: profiles, error: profilesError } = await db
-        .from("profiles")
-        .select("id, username")
-        .in("id", ids)
-        .order("username", { ascending: true });
+      const { data: profiles, error: profilesError } =
+        await db
+          .from("profiles")
+          .select("id, username")
+          .in("id", ids)
+          .order("username", { ascending: true });
 
       if (profilesError) throw profilesError;
 
       for (const person of profiles || []) {
-        const button = makeElement("button", "person-item");
+        const button = makeElement(
+          "button",
+          "person-item"
+        );
+
         button.type = "button";
         button.dataset.userId = person.id;
+
         button.append(
-          makeElement("span", "avatar", (person.username || "?").slice(0, 1).toUpperCase()),
-          makeElement("span", "person-name", person.username || "Ученик")
+          makeElement(
+            "span",
+            "avatar",
+            (person.username || "?").slice(0, 1).toUpperCase()
+          ),
+          makeElement(
+            "span",
+            "person-name",
+            person.username || "Ученик"
+          )
         );
-        button.addEventListener("click", () => openPersonalChat(person));
+
+        button.addEventListener(
+          "click",
+          () => openPersonalChat(person)
+        );
+
         memberButtons.push(button);
         sidebar.append(button);
       }
@@ -418,86 +583,405 @@ async function showMessenger() {
       if (!profiles?.length) {
         showEmpty("Не удалось найти профили одноклассников.");
       }
+
     } catch (error) {
-      status.textContent = "Не удалось загрузить список класса: " + readableError(error);
+      status.textContent =
+        "Не удалось загрузить список класса: " +
+        readableError(error);
     }
   }
 
+  // Загрузка групповых чатов.
+  async function loadCustomChats() {
+    customChatList.replaceChildren(
+      makeElement("p", "sidebar-caption", "Групповые чаты")
+    );
+
+    customChatButtons = [];
+
+    try {
+      const { data, error } = await db
+        .from("custom_chats")
+        .select("id, name")
+        .eq("class_id", currentClass.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      for (const chat of data || []) {
+        const button = makeElement(
+          "button",
+          "person-item"
+        );
+
+        button.type = "button";
+        button.append(
+          makeElement("span", "avatar", "Г"),
+          makeElement("span", "person-name", chat.name)
+        );
+
+        button.addEventListener(
+          "click",
+          () => openCustomChat(chat)
+        );
+
+        customChatButtons.push(button);
+        customChatList.append(button);
+      }
+
+    } catch (error) {
+      status.textContent =
+        "Ошибка загрузки групп: " + readableError(error);
+    }
+  }
+
+  // Создание группового чата.
+  async function createCustomChat() {
+    const name = prompt("Как назвать групповой чат?");
+
+    if (!name || !name.trim()) return;
+
+    const namesText = prompt(
+      "Введи имена пользователей через запятую.\n" +
+      "Например: alex, maria, ivan"
+    );
+
+    if (!namesText) return;
+
+    const names = [...new Set(
+      namesText
+        .split(",")
+        .map(x => x.trim().toLowerCase())
+        .filter(Boolean)
+    )];
+
+    if (!names.length) return;
+
+    try {
+      status.textContent = "Создаём чат...";
+
+      const { data: classmates, error: classmatesError } =
+        await db
+          .from("class_members")
+          .select("user_id")
+          .eq("class_id", currentClass.id);
+
+      if (classmatesError) throw classmatesError;
+
+      const classIds = (classmates || []).map(
+        x => x.user_id
+      );
+
+      const { data: profiles, error: profilesError } =
+        await db
+          .from("profiles")
+          .select("id, username")
+          .in("id", classIds);
+
+      if (profilesError) throw profilesError;
+
+      const found = (profiles || []).filter(person =>
+        names.includes(person.username.toLowerCase())
+      );
+
+      const missing = names.filter(name =>
+        !(profiles || []).some(
+          p => p.username.toLowerCase() === name
+        )
+      );
+
+      if (missing.length) {
+        throw new Error(
+          "Не найдены пользователи: " + missing.join(", ")
+        );
+      }
+
+      const { data: chat, error: chatError } = await db
+        .from("custom_chats")
+        .insert({
+          class_id: currentClass.id,
+          name: name.trim(),
+          created_by: currentUser.id
+        })
+        .select("id, name")
+        .single();
+
+      if (chatError) throw chatError;
+
+      const memberIds = [...new Set([
+        currentUser.id,
+        ...found.map(person => person.id)
+      ])];
+
+      const { error: insertError } = await db
+        .from("custom_chat_members")
+        .insert(
+          memberIds.map(userId => ({
+            chat_id: chat.id,
+            user_id: userId
+          }))
+        );
+
+      if (insertError) throw insertError;
+
+      await loadCustomChats();
+      await openCustomChat(chat);
+
+    } catch (error) {
+      status.textContent =
+        "Не удалось создать чат: " + readableError(error);
+    }
+  }
+
+  // Открытие группового чата.
+  async function openCustomChat(chat) {
+    selectedGroup = chat;
+    selectedPerson = null;
+    activeMode = "group";
+
+    classTab.classList.remove("active");
+    personalTab.classList.remove("active");
+    classItem.classList.remove("active");
+
+    for (const button of memberButtons) {
+      button.classList.remove("active");
+    }
+
+    for (const button of customChatButtons) {
+      button.classList.toggle(
+        "active",
+        button.querySelector(".person-name")?.textContent === chat.name
+      );
+    }
+
+    heading.replaceChildren(
+      makeElement("h2", "", chat.name),
+      makeElement("p", "", "Групповой чат")
+    );
+
+    composer.classList.remove("hidden");
+    textarea.placeholder = "Сообщение в группу...";
+
+    await loadCustomChatMessages();
+  }
+
+  // Загрузка сообщений группы.
+  async function loadCustomChatMessages() {
+    if (!selectedGroup) return;
+
+    status.textContent = "Загружаем сообщения...";
+
+    try {
+      const { data, error } = await db
+        .from("custom_chat_messages")
+        .select("id, sender_id, body, created_at, profiles(username)")
+        .eq("chat_id", selectedGroup.id)
+        .order("created_at", { ascending: true })
+        .limit(200);
+
+      if (error) throw error;
+
+      const fragment = document.createDocumentFragment();
+
+      if (!data.length) {
+        fragment.append(
+          makeElement(
+            "p",
+            "empty-state",
+            "Пока сообщений нет. Напиши первое!"
+          )
+        );
+      }
+
+      for (const item of data) {
+        const bubble = makeElement(
+          "article",
+          "chat-message" +
+          (item.sender_id === currentUser.id ? " mine" : "")
+        );
+
+        bubble.append(
+          makeElement(
+            "div",
+            "message-author",
+            item.profiles?.username || "Участник"
+          ),
+          makeElement("div", "", item.body),
+          makeElement(
+            "time",
+            "message-time",
+            new Date(item.created_at).toLocaleString("ru-RU", {
+              hour: "2-digit",
+              minute: "2-digit"
+            })
+          )
+        );
+
+        fragment.append(bubble);
+      }
+
+      messages.replaceChildren(fragment);
+      messages.scrollTop = messages.scrollHeight;
+
+      status.textContent =
+        "Групповой чат · " + selectedGroup.name;
+
+    } catch (error) {
+      status.textContent =
+        "Ошибка: " + readableError(error);
+    }
+  }
+
+  // Переключение на классный чат.
   classTab.addEventListener("click", async () => {
     setActiveTab("class");
+
     selectedPerson = null;
-    sidebar.replaceChildren(makeElement("h2", "", "Мои чаты"), classItem);
+    selectedGroup = null;
+
+    sidebar.replaceChildren(
+      makeElement("h2", "", "Мои чаты"),
+      classItem,
+      createChatBtn,
+      customChatList
+    );
+
     classItem.classList.add("active");
+
+    await loadCustomChats();
+
     heading.replaceChildren(
       makeElement("h2", "", currentClass.name),
       makeElement("p", "", "Общий чат класса")
     );
+
     composer.classList.remove("hidden");
     textarea.placeholder = "Напиши сообщение...";
+
     await loadMessages(messages, status);
   });
 
+  // Переключение на личные сообщения.
   personalTab.addEventListener("click", async () => {
     setActiveTab("personal");
+
+    selectedPerson = null;
+    selectedGroup = null;
+
     classItem.classList.remove("active");
+
     composer.classList.remove("hidden");
     textarea.placeholder = "Сначала выбери собеседника...";
+
     heading.replaceChildren(
       makeElement("h2", "", "Личные сообщения"),
       makeElement("p", "", "Переписки с одноклассниками")
     );
+
     await loadClassmates();
   });
 
-  classItem.addEventListener("click", () => classTab.click());
+  classItem.addEventListener("click", () => {
+    classTab.click();
+  });
 
+  createChatBtn.addEventListener(
+    "click",
+    createCustomChat
+  );
+
+  // Отправка сообщений.
   composer.addEventListener("submit", async (event) => {
     event.preventDefault();
+
     const body = textarea.value.trim();
+
     if (!body) return;
 
-    if (activeMode === "personal" && !selectedPerson) {
+    if (
+      activeMode === "personal" &&
+      !selectedPerson
+    ) {
       status.textContent = "Сначала выбери одноклассника.";
       return;
     }
 
+    if (
+      activeMode === "group" &&
+      !selectedGroup
+    ) {
+      status.textContent = "Сначала выбери групповой чат.";
+      return;
+    }
+
     sendBtn.disabled = true;
+
     try {
       let result;
+
       if (activeMode === "class") {
-        result = await db.from("messages").insert({
-          class_id: currentClass.id,
-          user_id: currentUser.id,
-          body
-        });
-      } else {
-        result = await db.from("private_messages").insert({
-          class_id: currentClass.id,
-          sender_id: currentUser.id,
-          recipient_id: selectedPerson.id,
-          body
-        });
+        result = await db
+          .from("messages")
+          .insert({
+            class_id: currentClass.id,
+            user_id: currentUser.id,
+            body
+          });
+
+      } else if (activeMode === "personal") {
+        result = await db
+          .from("private_messages")
+          .insert({
+            class_id: currentClass.id,
+            sender_id: currentUser.id,
+            recipient_id: selectedPerson.id,
+            body
+          });
+
+      } else if (activeMode === "group") {
+        result = await db
+          .from("custom_chat_messages")
+          .insert({
+            chat_id: selectedGroup.id,
+            sender_id: currentUser.id,
+            body
+          });
       }
 
       if (result.error) throw result.error;
+
       textarea.value = "";
+
       if (activeMode === "class") {
         await loadMessages(messages, status);
-      } else {
+
+      } else if (activeMode === "personal") {
         await loadPersonalMessages();
+
+      } else if (activeMode === "group") {
+        await loadCustomChatMessages();
       }
+
     } catch (error) {
-      status.textContent = "Ошибка отправки: " + readableError(error);
+      status.textContent =
+        "Ошибка отправки: " + readableError(error);
+
     } finally {
       sendBtn.disabled = false;
       textarea.focus();
     }
   });
 
+  // Первичная загрузка классного чата.
   await loadMessages(messages, status);
+  await loadCustomChats();
 
+  // Обновления в реальном времени.
   realtimeChannel = db
-    .channel("va-chat-" + currentClass.id + "-" + currentUser.id)
+    .channel(
+      "va-chat-" + currentClass.id + "-" + currentUser.id
+    )
+
     .on(
       "postgres_changes",
       {
@@ -507,9 +991,12 @@ async function showMessenger() {
         filter: "class_id=eq." + currentClass.id
       },
       () => {
-        if (activeMode === "class") loadMessages(messages, status);
+        if (activeMode === "class") {
+          loadMessages(messages, status);
+        }
       }
     )
+
     .on(
       "postgres_changes",
       {
@@ -520,30 +1007,60 @@ async function showMessenger() {
       },
       (payload) => {
         const item = payload.new;
+
         if (
           activeMode === "personal" &&
           selectedPerson &&
           (
-            (item.sender_id === currentUser.id && item.recipient_id === selectedPerson.id) ||
-            (item.sender_id === selectedPerson.id && item.recipient_id === currentUser.id)
+            (
+              item.sender_id === currentUser.id &&
+              item.recipient_id === selectedPerson.id
+            ) ||
+            (
+              item.sender_id === selectedPerson.id &&
+              item.recipient_id === currentUser.id
+            )
           )
         ) {
           loadPersonalMessages();
         }
       }
     )
+
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "custom_chat_messages"
+      },
+      (payload) => {
+        if (
+          activeMode === "group" &&
+          selectedGroup &&
+          payload.new.chat_id === selectedGroup.id
+        ) {
+          loadCustomChatMessages();
+        }
+      }
+    )
+
     .subscribe((state) => {
       if (state === "SUBSCRIBED") {
-        status.textContent = "Онлайн · " + currentUser.email.split("@")[0];
+        status.textContent =
+          "Онлайн · " + (currentProfile?.username || "Пользователь");
+
       } else if (state === "CHANNEL_ERROR") {
-        status.textContent = "Не удалось подключить обновления чата.";
+        status.textContent =
+          "Не удалось подключить обновления чата.";
       }
     });
 }
 
-
+// Загрузка обычных сообщений класса.
 async function loadMessages(container, status) {
   if (loadingMessages || !currentClass) return;
+
   loadingMessages = true;
 
   try {
@@ -572,7 +1089,7 @@ async function loadMessages(container, status) {
       const bubble = makeElement(
         "article",
         "chat-message" +
-          (item.user_id === currentUser.id ? " mine" : "")
+        (item.user_id === currentUser.id ? " mine" : "")
       );
 
       bubble.append(
@@ -599,14 +1116,20 @@ async function loadMessages(container, status) {
 
     container.replaceChildren(fragment);
     container.scrollTop = container.scrollHeight;
+
     status.textContent = "Сообщения загружены.";
+
   } catch (error) {
-    status.textContent = "Не удалось загрузить сообщения: " + readableError(error);
+    status.textContent =
+      "Не удалось загрузить сообщения: " +
+      readableError(error);
+
   } finally {
     loadingMessages = false;
   }
 }
 
+// Выход из аккаунта.
 async function logout() {
   if (realtimeChannel) {
     await db.removeChannel(realtimeChannel);
@@ -616,6 +1139,7 @@ async function logout() {
   await db.auth.signOut();
 
   currentUser = null;
+  currentProfile = null;
   currentClass = null;
   loadingMessages = false;
 
@@ -624,7 +1148,7 @@ async function logout() {
   location.reload();
 }
 
-// Восстанавливаем сессию после обновления страницы.
+// Восстановление сессии после обновления страницы.
 async function init() {
   try {
     const { data, error } = await db.auth.getSession();
@@ -643,24 +1167,30 @@ async function init() {
 
     if (profileError) throw profileError;
 
-    const savedClassId = localStorage.getItem("vachat_class_id");
+    currentProfile = profile;
+
+    const savedClassId = localStorage.getItem(
+      "vachat_class_id"
+    );
 
     if (savedClassId) {
-      const { data: membership, error: membershipError } = await db
-        .from("class_members")
-        .select("class_id")
-        .eq("class_id", savedClassId)
-        .eq("user_id", currentUser.id)
-        .maybeSingle();
+      const { data: membership, error: membershipError } =
+        await db
+          .from("class_members")
+          .select("class_id")
+          .eq("class_id", savedClassId)
+          .eq("user_id", currentUser.id)
+          .maybeSingle();
 
       if (membershipError) throw membershipError;
 
       if (membership) {
-        const { data: savedClass, error: classError } = await db
-          .from("classes")
-          .select("id, name")
-          .eq("id", savedClassId)
-          .single();
+        const { data: savedClass, error: classError } =
+          await db
+            .from("classes")
+            .select("id, name")
+            .eq("id", savedClassId)
+            .single();
 
         if (classError) throw classError;
 
