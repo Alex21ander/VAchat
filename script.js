@@ -242,7 +242,6 @@ async function showMessenger() {
   const logoutBtn = makeElement("button", "secondary-btn", "Выйти");
   logoutBtn.type = "button";
   logoutBtn.addEventListener("click", logout);
-
   topbar.append(brand, logoutBtn);
 
   const tabs = makeElement("div", "chat-tabs");
@@ -253,9 +252,7 @@ async function showMessenger() {
 
   const layout = makeElement("div", "chat-layout");
   const sidebar = makeElement("aside", "sidebar");
-  sidebar.append(
-    makeElement("h2", "", "Мои чаты")
-  );
+  sidebar.append(makeElement("h2", "", "Мои чаты"));
 
   const classItem = makeElement("button", "class-item active");
   classItem.type = "button";
@@ -274,15 +271,14 @@ async function showMessenger() {
 
   const messages = makeElement("div", "chat-messages");
   messages.setAttribute("aria-live", "polite");
-
   const status = makeElement("div", "status-line", "Подключение к чату...");
+
   const composer = makeElement("form", "composer");
   const textarea = makeElement("textarea", "");
   textarea.placeholder = "Напиши сообщение...";
   textarea.maxLength = 2000;
   textarea.required = true;
   textarea.setAttribute("aria-label", "Текст сообщения");
-
   const sendBtn = makeElement("button", "send-btn", "Отправить");
   sendBtn.type = "submit";
   composer.append(textarea, sendBtn);
@@ -292,54 +288,204 @@ async function showMessenger() {
   shell.append(topbar, tabs, layout);
   app.append(shell);
 
-  // Личные сообщения будут подключены на следующем этапе.
-  personalTab.addEventListener("click", () => {
-    classTab.classList.remove("active");
-    personalTab.classList.add("active");
-    heading.replaceChildren(
-      makeElement("h2", "", "Личные сообщения"),
-      makeElement("p", "", "Эта потом сделаем.")
-    );
-    messages.replaceChildren(
-      makeElement(
-        "p",
-        "empty-state",
-        "Здесь появятся личные переписки с одноклассниками."
-      )
-    );
-    composer.classList.add("hidden");
-    status.textContent = "Личные сообщения пока не подключены.";
-  });
+  let activeMode = "class";
+  let selectedPerson = null;
+  let memberButtons = [];
 
-  classTab.addEventListener("click", () => {
-    personalTab.classList.remove("active");
-    classTab.classList.add("active");
+  function setActiveTab(mode) {
+    activeMode = mode;
+    classTab.classList.toggle("active", mode === "class");
+    personalTab.classList.toggle("active", mode === "personal");
+  }
+
+  function showEmpty(text) {
+    messages.replaceChildren(makeElement("p", "empty-state", text));
+  }
+
+  async function loadPersonalMessages() {
+    if (!selectedPerson) {
+      showEmpty("Выбери одноклассника слева, чтобы начать переписку.");
+      return;
+    }
+
+    status.textContent = "Загружаем переписку...";
+    try {
+      const { data, error } = await db
+        .from("private_messages")
+        .select("id, sender_id, recipient_id, body, created_at")
+        .eq("class_id", currentClass.id)
+        .or(
+          `and(sender_id.eq.${currentUser.id},recipient_id.eq.${selectedPerson.id}),and(sender_id.eq.${selectedPerson.id},recipient_id.eq.${currentUser.id})`
+        )
+        .order("created_at", { ascending: true })
+        .limit(200);
+
+      if (error) throw error;
+
+      const fragment = document.createDocumentFragment();
+      if (!data.length) {
+        fragment.append(makeElement(
+          "p", "empty-state", "Это начало вашей переписки. Напиши первое сообщение!"
+        ));
+      }
+
+      for (const item of data) {
+        const bubble = makeElement(
+          "article",
+          "chat-message" + (item.sender_id === currentUser.id ? " mine" : "")
+        );
+        bubble.append(
+          makeElement("div", "", item.body),
+          makeElement(
+            "time",
+            "message-time",
+            new Date(item.created_at).toLocaleString("ru-RU", {
+              hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit"
+            })
+          )
+        );
+        fragment.append(bubble);
+      }
+
+      messages.replaceChildren(fragment);
+      messages.scrollTop = messages.scrollHeight;
+      status.textContent = "Личная переписка · " + selectedPerson.username;
+    } catch (error) {
+      status.textContent = "Не удалось загрузить переписку: " + readableError(error);
+    }
+  }
+
+  async function openPersonalChat(person) {
+    selectedPerson = person;
+    for (const button of memberButtons) {
+      button.classList.toggle("active", button.dataset.userId === person.id);
+    }
+
+    heading.replaceChildren(
+      makeElement("h2", "", person.username),
+      makeElement("p", "", "Личная переписка")
+    );
+    composer.classList.remove("hidden");
+    textarea.placeholder = "Сообщение для " + person.username + "...";
+    await loadPersonalMessages();
+  }
+
+  async function loadClassmates() {
+    sidebar.replaceChildren(
+      makeElement("h2", "", "Одноклассники")
+    );
+    memberButtons = [];
+    showEmpty("Выбери одноклассника слева, чтобы начать переписку.");
+
+    try {
+      const { data: memberships, error: membersError } = await db
+        .from("class_members")
+        .select("user_id")
+        .eq("class_id", currentClass.id);
+
+      if (membersError) throw membersError;
+
+      const ids = [...new Set((memberships || [])
+        .map(row => row.user_id)
+        .filter(id => id !== currentUser.id))];
+
+      if (!ids.length) {
+        showEmpty("Пока в классе нет других участников.");
+        return;
+      }
+
+      const { data: profiles, error: profilesError } = await db
+        .from("profiles")
+        .select("id, username")
+        .in("id", ids)
+        .order("username", { ascending: true });
+
+      if (profilesError) throw profilesError;
+
+      for (const person of profiles || []) {
+        const button = makeElement("button", "person-item");
+        button.type = "button";
+        button.dataset.userId = person.id;
+        button.append(
+          makeElement("span", "avatar", (person.username || "?").slice(0, 1).toUpperCase()),
+          makeElement("span", "person-name", person.username || "Ученик")
+        );
+        button.addEventListener("click", () => openPersonalChat(person));
+        memberButtons.push(button);
+        sidebar.append(button);
+      }
+
+      if (!profiles?.length) {
+        showEmpty("Не удалось найти профили одноклассников.");
+      }
+    } catch (error) {
+      status.textContent = "Не удалось загрузить список класса: " + readableError(error);
+    }
+  }
+
+  classTab.addEventListener("click", async () => {
+    setActiveTab("class");
+    selectedPerson = null;
+    sidebar.replaceChildren(makeElement("h2", "", "Мои чаты"), classItem);
+    classItem.classList.add("active");
     heading.replaceChildren(
       makeElement("h2", "", currentClass.name),
       makeElement("p", "", "Общий чат класса")
     );
     composer.classList.remove("hidden");
-    loadMessages(messages, status);
+    textarea.placeholder = "Напиши сообщение...";
+    await loadMessages(messages, status);
   });
+
+  personalTab.addEventListener("click", async () => {
+    setActiveTab("personal");
+    classItem.classList.remove("active");
+    composer.classList.remove("hidden");
+    textarea.placeholder = "Сначала выбери собеседника...";
+    heading.replaceChildren(
+      makeElement("h2", "", "Личные сообщения"),
+      makeElement("p", "", "Переписки с одноклассниками")
+    );
+    await loadClassmates();
+  });
+
+  classItem.addEventListener("click", () => classTab.click());
 
   composer.addEventListener("submit", async (event) => {
     event.preventDefault();
-
     const body = textarea.value.trim();
     if (!body) return;
 
+    if (activeMode === "personal" && !selectedPerson) {
+      status.textContent = "Сначала выбери одноклассника.";
+      return;
+    }
+
     sendBtn.disabled = true;
-
     try {
-      const { error } = await db.from("messages").insert({
-        class_id: currentClass.id,
-        user_id: currentUser.id,
-        body
-      });
+      let result;
+      if (activeMode === "class") {
+        result = await db.from("messages").insert({
+          class_id: currentClass.id,
+          user_id: currentUser.id,
+          body
+        });
+      } else {
+        result = await db.from("private_messages").insert({
+          class_id: currentClass.id,
+          sender_id: currentUser.id,
+          recipient_id: selectedPerson.id,
+          body
+        });
+      }
 
-      if (error) throw error;
+      if (result.error) throw result.error;
       textarea.value = "";
-      status.textContent = "Сообщение отправлено.";
+      if (activeMode === "class") {
+        await loadMessages(messages, status);
+      } else {
+        await loadPersonalMessages();
+      }
     } catch (error) {
       status.textContent = "Ошибка отправки: " + readableError(error);
     } finally {
@@ -351,7 +497,7 @@ async function showMessenger() {
   await loadMessages(messages, status);
 
   realtimeChannel = db
-    .channel("class-chat-" + currentClass.id)
+    .channel("va-chat-" + currentClass.id + "-" + currentUser.id)
     .on(
       "postgres_changes",
       {
@@ -360,7 +506,31 @@ async function showMessenger() {
         table: "messages",
         filter: "class_id=eq." + currentClass.id
       },
-      () => loadMessages(messages, status)
+      () => {
+        if (activeMode === "class") loadMessages(messages, status);
+      }
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "private_messages",
+        filter: "class_id=eq." + currentClass.id
+      },
+      (payload) => {
+        const item = payload.new;
+        if (
+          activeMode === "personal" &&
+          selectedPerson &&
+          (
+            (item.sender_id === currentUser.id && item.recipient_id === selectedPerson.id) ||
+            (item.sender_id === selectedPerson.id && item.recipient_id === currentUser.id)
+          )
+        ) {
+          loadPersonalMessages();
+        }
+      }
     )
     .subscribe((state) => {
       if (state === "SUBSCRIBED") {
@@ -370,6 +540,7 @@ async function showMessenger() {
       }
     });
 }
+
 
 async function loadMessages(container, status) {
   if (loadingMessages || !currentClass) return;
