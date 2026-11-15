@@ -34,9 +34,9 @@
 
         <div class="field">
           <label for="username">Имя пользователя</label>
-          <input id="username" required minlength="3" maxlength="30"
-            pattern="[A-Za-zА-Яа-яЁё0-9_-]+"
-            placeholder="Например, Ivan5" autocomplete="username">
+          <input id="username" required minlength="3" maxlength="24"
+            pattern="[A-Za-zА-Яа-яЁё0-9_-]{3,24}"
+            placeholder="Например, Иван5" autocomplete="username">
           <small>Без пробелов. Можно использовать буквы и цифры.</small>
         </div>
 

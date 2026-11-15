@@ -1,4 +1,3 @@
-
 const SUPABASE_URL = "https://zohhimpltawkaflzxdxe.supabase.co";
 const SUPABASE_KEY = "sb_publishable_1Ic64s3vJf3Q3eKr1w8fSQ_6oE_23gy";
 
@@ -106,15 +105,35 @@ registerTab.addEventListener("click", () => setMode("register"));
 role.addEventListener("change", () => setMode(mode));
 
 function usernameEmail(name) {
-  const normalized = name.trim().toLowerCase();
+  const normalized = name.trim().toLocaleLowerCase("ru-RU");
 
-  if (!/^[a-z0-9_-]{3,24}$/.test(normalized)) {
+  if (!/^[a-zа-яё0-9_-]{3,24}$/u.test(normalized)) {
     throw new Error(
-      "Имя пользователя: от 3 до 24 символов. Используй английские буквы, цифры, _ или -."
+      "Имя пользователя должно содержать от 3 до 24 символов. Разрешены русские и английские буквы, цифры, _ и -."
     );
   }
 
-  return normalized + "@vachat.example.com";
+  // Для латинских имён сохраняем прежний адрес, чтобы старые аккаунты
+  // продолжали входить без изменений.
+  if (/^[a-z0-9_-]+$/.test(normalized)) {
+    return normalized + "@vachat.example.com";
+  }
+
+  // Кириллическое имя кодируем в безопасный ASCII-адрес.
+  // Отдельный домен исключает пересечение с прежними латинскими аккаунтами.
+  const bytes = new TextEncoder().encode(normalized);
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  const encoded = btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+
+  return encoded + "@ru.vachat.example.com";
 }
 
 function readableError(error) {
@@ -1228,7 +1247,6 @@ async function showMessenger() {
             !item.person.username.toLowerCase().includes(query);
         });
       });
-
       content.append(search, list);
 
       openModal("Управление участниками", content, [
