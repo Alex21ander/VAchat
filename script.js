@@ -32,7 +32,6 @@ let currentUser = null;
 let currentProfile = null;
 let currentClass = null;
 let realtimeChannel = null;
-let loadingMessages = false;
 
 // ======================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -42,6 +41,7 @@ function makeElement(tag, className = "", text = "") {
   const element = document.createElement(tag);
 
   if (className) element.className = className;
+
   if (text !== undefined && text !== null) {
     element.textContent = String(text);
   }
@@ -57,6 +57,8 @@ function makeButton(text, className, callback) {
 }
 
 function showMessage(text, type = "") {
+  if (!message) return;
+
   message.textContent = text;
   message.className = "message";
 
@@ -151,12 +153,74 @@ function initials(name) {
 }
 
 // ======================================
+// МОДАЛЬНЫЕ ОКНА
+// ======================================
+
+function openModal(title, content, buttons = []) {
+  const overlay = makeElement("div", "va-modal-overlay");
+  const modal = makeElement("div", "va-modal");
+
+  const header = makeElement("div", "va-modal-header");
+  header.append(makeElement("h2", "", title));
+
+  const close = makeButton("×", "va-modal-close", () => {
+    overlay.remove();
+  });
+
+  header.append(close);
+
+  const body = makeElement("div", "va-modal-body");
+  body.append(content);
+
+  const footer = makeElement("div", "va-modal-footer");
+
+  buttons.forEach(button => {
+    footer.append(
+      makeButton(
+        button.text,
+        button.className || "va-secondary-btn",
+        () => button.callback(overlay)
+      )
+    );
+  });
+
+  modal.append(header, body);
+
+  if (buttons.length) {
+    modal.append(footer);
+  }
+
+  overlay.append(modal);
+
+  overlay.addEventListener("click", event => {
+    if (event.target === overlay) overlay.remove();
+  });
+
+  document.addEventListener("keydown", function escapeHandler(event) {
+    if (event.key === "Escape") {
+      overlay.remove();
+      document.removeEventListener("keydown", escapeHandler);
+    }
+  });
+
+  document.body.append(overlay);
+
+  return {
+    overlay,
+    body,
+    modal,
+    close: () => overlay.remove()
+  };
+}
+
+// ======================================
 // РАБОТА С ИЗОБРАЖЕНИЯМИ
 // ======================================
 
 function chooseImage() {
   return new Promise(resolve => {
     const input = document.createElement("input");
+
     input.type = "file";
     input.accept = "image/*";
     input.style.display = "none";
@@ -256,8 +320,6 @@ async function changeAvatar() {
     if (error) throw error;
 
     currentProfile.avatar_path = path;
-
-    showMessage("Аватарка обновлена.", "success");
 
     await showMessenger();
 
@@ -474,6 +536,7 @@ async function showMessenger() {
     "attach-btn",
     async () => {
       const file = await chooseImage();
+
       if (file) {
         selectedFile = file;
         status.textContent = "Прикреплено: " + file.name;
@@ -569,14 +632,22 @@ async function showMessenger() {
       );
 
       for (const chat of customChats) {
-        sidebar.append(
-          sidebarButton(
-            chat.name,
-            "Г",
-            () => openCustomChat(chat),
-            selectedGroup?.id === chat.id
-          )
+        const button = makeButton(
+          "",
+          "person-item" +
+          (selectedGroup?.id === chat.id ? " active" : ""),
+          () => openCustomChat(chat)
         );
+
+        button.append(
+          await makeAvatar({
+            username: chat.name,
+            avatar_path: chat.image_path
+          }),
+          makeElement("span", "person-name", chat.name)
+        );
+
+        sidebar.append(button);
       }
 
     } else {
@@ -598,7 +669,11 @@ async function showMessenger() {
 
       if (!classmates.length) {
         sidebar.append(
-          makeElement("p", "empty-state", "В классе пока нет других участников.")
+          makeElement(
+            "p",
+            "empty-state",
+            "В классе пока нет других участников."
+          )
         );
       }
     }
@@ -659,7 +734,11 @@ async function showMessenger() {
 
     if (!rows?.length) {
       fragment.append(
-        makeElement("p", "empty-state", "Пока сообщений нет. Напиши первое!")
+        makeElement(
+          "p",
+          "empty-state",
+          "Пока сообщений нет. Напиши первое!"
+        )
       );
 
       messages.replaceChildren(fragment);
@@ -677,14 +756,22 @@ async function showMessenger() {
       );
 
       if (kind !== "personal") {
-        bubble.append(
+        const authorRow = makeElement("div", "message-author-row");
+
+        const author = item.profiles || (
+          mine ? currentProfile : null
+        );
+
+        authorRow.append(
+          await makeAvatar(author || { username: "Участник" }),
           makeElement(
             "div",
             "message-author",
-            item.profiles?.username ||
-            (mine ? currentProfile.username : "Участник")
+            author?.username || "Участник"
           )
         );
+
+        bubble.append(authorRow);
       }
 
       if (item.body) {
@@ -709,7 +796,11 @@ async function showMessenger() {
           bubble.append(img);
         } else {
           bubble.append(
-            makeElement("p", "message-image-error", "Не удалось загрузить изображение.")
+            makeElement(
+              "p",
+              "message-image-error",
+              "Не удалось загрузить изображение."
+            )
           );
         }
       }
@@ -746,7 +837,9 @@ async function showMessenger() {
   async function loadClassMessages() {
     const { data, error } = await db
       .from("messages")
-      .select("id, user_id, body, image_path, created_at, profiles(username)")
+      .select(
+        "id, user_id, body, image_path, created_at, profiles(username, avatar_path)"
+      )
       .eq("class_id", currentClass.id)
       .order("created_at", { ascending: true })
       .limit(150);
@@ -765,7 +858,9 @@ async function showMessenger() {
 
     const { data, error } = await db
       .from("private_messages")
-      .select("id, sender_id, recipient_id, body, image_path, created_at")
+      .select(
+        "id, sender_id, recipient_id, body, image_path, created_at"
+      )
       .eq("class_id", currentClass.id)
       .or(
         `and(sender_id.eq.${currentUser.id},recipient_id.eq.${selectedPerson.id}),and(sender_id.eq.${selectedPerson.id},recipient_id.eq.${currentUser.id})`
@@ -786,7 +881,9 @@ async function showMessenger() {
 
     const { data, error } = await db
       .from("custom_chat_messages")
-      .select("id, sender_id, body, image_path, created_at, profiles(username)")
+      .select(
+        "id, sender_id, body, image_path, created_at, profiles(username, avatar_path)"
+      )
       .eq("chat_id", selectedGroup.id)
       .order("created_at", { ascending: true })
       .limit(200);
@@ -892,94 +989,127 @@ async function showMessenger() {
   // --------------------------------------
 
   async function createCustomChat() {
-    const name = prompt("Как назвать групповой чат?");
-
-    if (!name?.trim()) return;
-
-    const namesText = prompt(
-      "Введи имена участников через запятую.\nНапример: alex, maria, ivan"
-    );
-
-    if (!namesText?.trim()) return;
-
     try {
-      status.textContent = "Создаём групповой чат...";
+      await loadClassmates();
 
-      const { data: memberships, error: membersError } = await db
-        .from("class_members")
-        .select("user_id")
-        .eq("class_id", currentClass.id);
+      const content = makeElement("div");
 
-      if (membersError) throw membersError;
-
-      const ids = [...new Set(
-        (memberships || []).map(x => x.user_id)
-      )];
-
-      const { data: profiles, error: profilesError } = await db
-        .from("profiles")
-        .select("id, username")
-        .in("id", ids);
-
-      if (profilesError) throw profilesError;
-
-      const names = [...new Set(
-        namesText
-          .split(",")
-          .map(x => x.trim().toLowerCase())
-          .filter(Boolean)
-      )];
-
-      const found = (profiles || []).filter(person =>
-        names.includes(person.username.toLowerCase())
+      const nameField = makeElement("div", "va-field");
+      nameField.append(
+        makeElement("label", "", "Название группы")
       );
 
-      const missing = names.filter(name =>
-        !(profiles || []).some(
-          person => person.username.toLowerCase() === name
-        )
-      );
+      const nameInput = makeElement("input");
+      nameInput.placeholder = "Например, Проект по математике";
+      nameInput.maxLength = 60;
 
-      if (missing.length) {
-        throw new Error(
-          "Не найдены пользователи: " + missing.join(", ")
-        );
+      nameField.append(nameInput);
+
+      const search = makeElement("input", "member-search");
+      search.placeholder = "Поиск участников...";
+
+      const list = makeElement("div", "member-select-list");
+      const checkboxes = [];
+
+      for (const person of classmates) {
+        const label = makeElement("label", "member-select-item");
+
+        const checkbox = makeElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = person.id;
+
+        const text = makeElement("span", "", person.username);
+
+        label.append(checkbox, text);
+        list.append(label);
+
+        checkboxes.push({
+          person,
+          label,
+          checkbox
+        });
       }
 
-      const { data: chat, error: chatError } = await db
-        .from("custom_chats")
-        .insert({
-          class_id: currentClass.id,
-          name: name.trim(),
-          created_by: currentUser.id
-        })
-        .select("id, name, image_path, created_by, class_id")
-        .single();
+      search.addEventListener("input", () => {
+        const query = search.value.toLowerCase();
 
-      if (chatError) throw chatError;
+        checkboxes.forEach(item => {
+          item.label.hidden =
+            !item.person.username.toLowerCase().includes(query);
+        });
+      });
 
-      const memberIds = [...new Set([
-        currentUser.id,
-        ...found.map(person => person.id)
-      ])];
+      content.append(nameField, search, list);
 
-      const { error: insertError } = await db
-        .from("custom_chat_members")
-        .insert(
-          memberIds.map(userId => ({
-            chat_id: chat.id,
-            user_id: userId
-          }))
-        );
+      openModal("Создать групповой чат", content, [
+        {
+          text: "Отмена",
+          className: "va-secondary-btn",
+          callback: overlay => overlay.remove()
+        },
+        {
+          text: "Создать",
+          className: "va-primary-btn",
+          callback: async overlay => {
+            const name = nameInput.value.trim();
 
-      if (insertError) throw insertError;
+            if (!name) {
+              alert("Введи название группы.");
+              return;
+            }
 
-      await loadCustomChats();
-      await openCustomChat(chat);
+            const selectedIds = checkboxes
+              .filter(item => item.checkbox.checked)
+              .map(item => item.person.id);
+
+            try {
+              const { data: chat, error } = await db
+                .from("custom_chats")
+                .insert({
+                  class_id: currentClass.id,
+                  name,
+                  created_by: currentUser.id
+                })
+                .select(
+                  "id, name, image_path, created_by, class_id"
+                )
+                .single();
+
+              if (error) throw error;
+
+              const memberIds = [
+                ...new Set([currentUser.id, ...selectedIds])
+              ];
+
+              const { error: memberError } = await db
+                .from("custom_chat_members")
+                .insert(
+                  memberIds.map(userId => ({
+                    chat_id: chat.id,
+                    user_id: userId
+                  }))
+                );
+
+              if (memberError) throw memberError;
+
+              overlay.remove();
+
+              await loadCustomChats();
+              await openCustomChat(chat);
+
+            } catch (error) {
+              alert(
+                "Не удалось создать группу: " +
+                readableError(error)
+              );
+            }
+          }
+        }
+      ]);
 
     } catch (error) {
       status.textContent =
-        "Не удалось создать чат: " + readableError(error);
+        "Ошибка создания группы: " + readableError(error);
     }
   }
 
@@ -988,26 +1118,16 @@ async function showMessenger() {
   // --------------------------------------
 
   async function getGroupProfiles() {
-    const { data: members, error } = await db
-      .from("custom_chat_members")
-      .select("user_id")
-      .eq("chat_id", selectedGroup.id);
+    const { data, error } = await db.rpc(
+      "get_custom_chat_members",
+      {
+        p_chat_id: selectedGroup.id
+      }
+    );
 
     if (error) throw error;
 
-    const ids = (members || []).map(m => m.user_id);
-
-    if (!ids.length) return [];
-
-    const { data: profiles, error: profileError } = await db
-      .from("profiles")
-      .select("id, username")
-      .in("id", ids)
-      .order("username");
-
-    if (profileError) throw profileError;
-
-    return profiles || [];
+    return data || [];
   }
 
   async function showGroupMembers() {
@@ -1016,15 +1136,37 @@ async function showMessenger() {
     try {
       const profiles = await getGroupProfiles();
 
-      const names = profiles.map(person =>
-        person.username +
-        (person.id === selectedGroup.created_by ? " (создатель)" : "")
-      );
+      const list = makeElement("div", "member-list");
 
-      alert(
-        "Участники группы:\n\n" +
-        (names.join("\n") || "Участников пока нет.")
-      );
+      if (!profiles.length) {
+        list.append(
+          makeElement("p", "empty-state", "Участников пока нет.")
+        );
+      }
+
+      for (const person of profiles) {
+        const item = makeElement("div", "member-item");
+
+        item.append(await makeAvatar(person));
+
+        const info = makeElement("div", "member-info");
+
+        info.append(
+          makeElement("div", "member-name", person.username),
+          makeElement(
+            "div",
+            "member-caption",
+            person.id === selectedGroup.created_by
+              ? "Создатель группы"
+              : "Участник"
+          )
+        );
+
+        item.append(info);
+        list.append(item);
+      }
+
+      openModal("Участники группы", list);
 
     } catch (error) {
       status.textContent =
@@ -1032,83 +1174,130 @@ async function showMessenger() {
     }
   }
 
+  // --------------------------------------
+  // УПРАВЛЕНИЕ УЧАСТНИКАМИ
+  // --------------------------------------
+
   async function manageGroupMembers() {
-    if (!selectedGroup || selectedGroup.created_by !== currentUser.id) {
+    if (
+      !selectedGroup ||
+      selectedGroup.created_by !== currentUser.id
+    ) {
       return;
     }
 
-    const action = prompt(
-      "Управление участниками:\n\n" +
-      "Напиши «добавить» или «удалить»."
-    );
-
-    if (!action) return;
-
     try {
-      if (action.toLowerCase().startsWith("д")) {
-        const name = prompt("Имя пользователя, которого добавить:");
+      await loadClassmates();
 
-        if (!name?.trim()) return;
+      const profiles = await getGroupProfiles();
+      const currentIds = new Set(profiles.map(p => p.id));
 
-        const { data: profile, error } = await db
-          .from("profiles")
-          .select("id, username")
-          .ilike("username", name.trim())
-          .maybeSingle();
+      const content = makeElement("div");
 
-        if (error) throw error;
-        if (!profile) throw new Error("Пользователь не найден.");
+      const search = makeElement("input", "member-search");
+      search.placeholder = "Поиск пользователя...";
 
-        const { error: addError } = await db.rpc(
-          "add_custom_chat_member",
-          {
-            p_chat_id: selectedGroup.id,
-            p_user_id: profile.id
-          }
-        );
+      const list = makeElement("div", "member-select-list");
+      const checkboxes = [];
 
-        if (addError) throw addError;
+      for (const person of classmates) {
+        const label = makeElement("label", "member-select-item");
 
-        status.textContent = "Участник добавлен.";
+        const checkbox = makeElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = currentIds.has(person.id);
+        checkbox.value = person.id;
 
-      } else if (action.toLowerCase().startsWith("у")) {
-        const profiles = await getGroupProfiles();
+        const text = makeElement("span", "", person.username);
 
-        const name = prompt(
-          "Кого удалить?\n" +
-          profiles.map(p => p.username).join(", ")
-        );
+        label.append(checkbox, text);
+        list.append(label);
 
-        if (!name?.trim()) return;
-
-        const person = profiles.find(
-          p => p.username.toLowerCase() === name.trim().toLowerCase()
-        );
-
-        if (!person) throw new Error("Участник не найден.");
-
-        const { error: removeError } = await db.rpc(
-          "remove_custom_chat_member",
-          {
-            p_chat_id: selectedGroup.id,
-            p_user_id: person.id
-          }
-        );
-
-        if (removeError) throw removeError;
-
-        status.textContent = "Участник удалён.";
-
-      } else {
-        return;
+        checkboxes.push({
+          person,
+          checkbox,
+          label
+        });
       }
 
-      await showGroupMembers();
-      await loadCustomChats();
+      search.addEventListener("input", () => {
+        const query = search.value.toLowerCase();
+
+        checkboxes.forEach(item => {
+          item.label.hidden =
+            !item.person.username.toLowerCase().includes(query);
+        });
+      });
+
+      content.append(search, list);
+
+      openModal("Управление участниками", content, [
+        {
+          text: "Отмена",
+          className: "va-secondary-btn",
+          callback: overlay => overlay.remove()
+        },
+        {
+          text: "Сохранить",
+          className: "va-primary-btn",
+          callback: async overlay => {
+            try {
+              const selectedIds = new Set(
+                checkboxes
+                  .filter(item => item.checkbox.checked)
+                  .map(item => item.person.id)
+              );
+
+              for (const person of profiles) {
+                if (
+                  person.id !== currentUser.id &&
+                  !selectedIds.has(person.id)
+                ) {
+                  const { error } = await db.rpc(
+                    "remove_custom_chat_member",
+                    {
+                      p_chat_id: selectedGroup.id,
+                      p_user_id: person.id
+                    }
+                  );
+
+                  if (error) throw error;
+                }
+              }
+
+              for (const id of selectedIds) {
+                if (!currentIds.has(id)) {
+                  const { error } = await db.rpc(
+                    "add_custom_chat_member",
+                    {
+                      p_chat_id: selectedGroup.id,
+                      p_user_id: id
+                    }
+                  );
+
+                  if (error) throw error;
+                }
+              }
+
+              overlay.remove();
+
+              status.textContent = "Участники обновлены.";
+
+              await showGroupMembers();
+
+            } catch (error) {
+              alert(
+                "Ошибка изменения участников: " +
+                readableError(error)
+              );
+            }
+          }
+        }
+      ]);
 
     } catch (error) {
       status.textContent =
-        "Не удалось изменить участников: " + readableError(error);
+        "Ошибка загрузки участников: " + readableError(error);
     }
   }
 
@@ -1117,75 +1306,112 @@ async function showMessenger() {
   // --------------------------------------
 
   async function groupSettings() {
-    if (!selectedGroup || selectedGroup.created_by !== currentUser.id) {
+    if (
+      !selectedGroup ||
+      selectedGroup.created_by !== currentUser.id
+    ) {
       return;
     }
 
-    const action = prompt(
-      "Настройки группы:\n\n" +
-      "1 — изменить название\n" +
-      "2 — изменить картинку\n" +
-      "3 — добавить или удалить участников"
+    const content = makeElement("div");
+
+    const nameField = makeElement("div", "va-field");
+    nameField.append(
+      makeElement("label", "", "Название группы")
     );
 
-    if (!action) return;
+    const nameInput = makeElement("input");
+    nameInput.value = selectedGroup.name;
+    nameInput.maxLength = 60;
 
-    try {
-      if (action === "1") {
-        const newName = prompt(
-          "Новое название группы:",
-          selectedGroup.name
-        );
+    nameField.append(nameInput);
 
-        if (!newName?.trim()) return;
+    const imageButton = makeButton(
+      "Изменить изображение группы",
+      "va-secondary-btn",
+      async () => {
+        try {
+          const file = await chooseImage();
 
-        const { error } = await db.rpc("update_custom_chat", {
-          p_chat_id: selectedGroup.id,
-          p_name: newName.trim(),
-          p_image_path: selectedGroup.image_path || null
-        });
+          if (!file) return;
 
-        if (error) throw error;
+          const path = await uploadImage(
+            file,
+            `groups/${selectedGroup.id}/${currentUser.id}`
+          );
 
-        selectedGroup.name = newName.trim();
+          const { error } = await db.rpc("update_custom_chat", {
+            p_chat_id: selectedGroup.id,
+            p_name: nameInput.value.trim() || selectedGroup.name,
+            p_image_path: path
+          });
 
-      } else if (action === "2") {
-        const file = await chooseImage();
+          if (error) throw error;
 
-        if (!file) return;
+          selectedGroup.image_path = path;
 
-        const path = await uploadImage(
-          file,
-          `groups/${selectedGroup.id}/${currentUser.id}`
-        );
+          await loadCustomChats();
+          await openCustomChat(selectedGroup);
 
-        const { error } = await db.rpc("update_custom_chat", {
-          p_chat_id: selectedGroup.id,
-          p_name: selectedGroup.name,
-          p_image_path: path
-        });
+          alert("Изображение группы обновлено.");
 
-        if (error) throw error;
-
-        selectedGroup.image_path = path;
-
-      } else if (action === "3") {
-        await manageGroupMembers();
-        return;
-
-      } else {
-        return;
+        } catch (error) {
+          alert(readableError(error));
+        }
       }
+    );
 
-      await loadCustomChats();
-      await openCustomChat(selectedGroup);
+    const membersButton = makeButton(
+      "Управление участниками",
+      "va-secondary-btn",
+      async () => {
+        await manageGroupMembers();
+      }
+    );
 
-      status.textContent = "Настройки группы сохранены.";
+    content.append(nameField, imageButton, membersButton);
 
-    } catch (error) {
-      status.textContent =
-        "Не удалось изменить группу: " + readableError(error);
-    }
+    openModal("Настройки группы", content, [
+      {
+        text: "Закрыть",
+        className: "va-secondary-btn",
+        callback: overlay => overlay.remove()
+      },
+      {
+        text: "Сохранить",
+        className: "va-primary-btn",
+        callback: async overlay => {
+          try {
+            const name = nameInput.value.trim();
+
+            if (!name) {
+              alert("Название группы не может быть пустым.");
+              return;
+            }
+
+            const { error } = await db.rpc("update_custom_chat", {
+              p_chat_id: selectedGroup.id,
+              p_name: name,
+              p_image_path: selectedGroup.image_path || null
+            });
+
+            if (error) throw error;
+
+            selectedGroup.name = name;
+
+            overlay.remove();
+
+            await loadCustomChats();
+            await openCustomChat(selectedGroup);
+
+            status.textContent = "Настройки сохранены.";
+
+          } catch (error) {
+            alert(readableError(error));
+          }
+        }
+      }
+    ]);
   }
 
   // --------------------------------------
@@ -1437,7 +1663,6 @@ async function logout() {
   currentUser = null;
   currentProfile = null;
   currentClass = null;
-  loadingMessages = false;
 
   localStorage.removeItem("vachat_class_id");
 
