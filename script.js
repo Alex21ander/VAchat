@@ -766,8 +766,18 @@ async function showMessenger() {
       const row = presenceRows.find(item => item.user_id === person.id);
       const present = isPresentToday(row);
       const item = makeElement("div", "presence-person");
-      item.append(
+      const identity = makeElement("div", "presence-person-identity");
+      identity.append(
         makeElement("span", "presence-person-name", person.username),
+        makeElement(
+          "span",
+          "presence-person-role" + (person.role === "teacher" ? " is-teacher" : ""),
+          person.role === "teacher" ? "Учитель" : "Ученик"
+        )
+      );
+
+      item.append(
+        identity,
         makeElement(
           "span",
           "presence-pill" + (present ? " is-present" : ""),
@@ -867,15 +877,33 @@ async function showMessenger() {
         if (currentProfile.role === "student") {
           card.append(makeElement("span", call.acknowledged_at ? "call-acknowledged" : "call-pending", call.acknowledged_at ? "Отмечено как прочитанное" : "Ожидает подтверждения"));
           if (!call.acknowledged_at) {
-            card.append(makeButton("Понятно", "va-primary-btn", async () => {
-              const { error } = await db.from("teacher_calls").update({ acknowledged_at: new Date().toISOString() }).eq("id", call.id);
-              if (error) {
-                status.textContent = "Не удалось подтвердить вызов: " + readableError(error);
-                return;
+            card.append(makeButton("Понятно", "va-primary-btn", async event => {
+            const button = event?.currentTarget || null;
+            if (button) button.disabled = true;
+
+            try {
+              const { data, error } = await db.rpc(
+                "acknowledge_teacher_call",
+                { p_call_id: call.id }
+              );
+
+              if (error) throw error;
+
+              if (data !== true) {
+                throw new Error(
+                  "Supabase не подтвердил изменение. Проверь SQL-функцию acknowledge_teacher_call."
+                );
               }
+
+              call.acknowledged_at = new Date().toISOString();
               modal.close();
-              openCallsModal();
-            }));
+              await openCallsModal();
+            } catch (error) {
+              if (button) button.disabled = false;
+              status.textContent =
+                "Не удалось подтвердить вызов: " + readableError(error);
+            }
+          }));
           }
         }
         content.append(card);
@@ -902,14 +930,14 @@ async function showMessenger() {
     );
 
     if (activeMode !== "personal") {
-      sidebar.append(
-        sidebarButton(
-          "Классный чат",
-          "К",
-          () => switchTab("class"),
-          activeMode === "class"
-        )
+      const classButton = sidebarButton(
+        "Классный чат",
+        "К",
+        () => switchTab("class"),
+        activeMode === "class"
       );
+      addUnreadBadge(classButton, await countUnread("class", currentClass.id));
+      sidebar.append(classButton);
 
       sidebar.append(
         makeButton(
@@ -938,6 +966,7 @@ async function showMessenger() {
           }),
           makeElement("span", "person-name", chat.name)
         );
+        addUnreadBadge(button, await countUnread("group", chat.id));
 
         sidebar.append(button);
       }
@@ -956,6 +985,7 @@ async function showMessenger() {
           await makeAvatar(person),
           makeElement("span", "person-name", person.username)
         );
+        addUnreadBadge(button, await countUnread("private", currentClass.id, person.id));
         personRow.append(button);
 
         if (currentProfile.role === "teacher" && person.role === "student") {
@@ -1032,10 +1062,94 @@ async function showMessenger() {
   }
 
   // --------------------------------------
+  // НЕПРОЧИТАННЫЕ СООБЩЕНИЯ И ПРОЧТЕНИЕ
+  // --------------------------------------
+
+  async function getChatReadAt(type, chatId, peerId = null) {
+    const { data, error } = await db.rpc("vachat_get_other_read_at", {
+      p_type: type,
+      p_chat_id: chatId,
+      p_peer_id: peerId
+    });
+    if (error) throw error;
+    return data || null;
+  }
+
+  async function markChatRead(type, chatId, peerId = null) {
+    const values = {
+      user_id: currentUser.id,
+      chat_type: type,
+      chat_id: chatId,
+      peer_id: peerId,
+      last_read_at: new Date().toISOString()
+    };
+    const { error } = await db
+      .from("chat_read_states")
+      .upsert(values, { onConflict: "user_id,chat_type,chat_id,peer_id" });
+    if (error) throw error;
+  }
+
+  async function countUnread(type, chatId, peerId = null) {
+    let readQuery = db.from("chat_read_states")
+      .select("last_read_at")
+      .eq("user_id", currentUser.id)
+      .eq("chat_type", type)
+      .eq("chat_id", chatId);
+
+    if (peerId) readQuery = readQuery.eq("peer_id", peerId);
+    else readQuery = readQuery.is("peer_id", null);
+
+    const { data: state, error: stateError } = await readQuery.maybeSingle();
+    if (stateError) throw stateError;
+
+    let query;
+    if (type === "class") {
+      query = db.from("messages").select("id", { count: "exact", head: true })
+        .eq("class_id", chatId).neq("user_id", currentUser.id);
+    } else if (type === "group") {
+      query = db.from("custom_chat_messages").select("id", { count: "exact", head: true })
+        .eq("chat_id", chatId).neq("sender_id", currentUser.id);
+    } else {
+      query = db.from("private_messages").select("id", { count: "exact", head: true })
+        .eq("class_id", currentClass.id)
+        .eq("sender_id", peerId)
+        .eq("recipient_id", currentUser.id);
+    }
+
+    if (state?.last_read_at) query = query.gt("created_at", state.last_read_at);
+    const { count, error } = await query;
+    if (error) throw error;
+    return count || 0;
+  }
+
+  function addUnreadBadge(container, count) {
+    if (!count) return;
+    container.append(makeElement("span", "unread-badge", count > 99 ? "99+" : String(count)));
+  }
+
+  async function refreshUnreadBadges() {
+    if (activeMode === "personal") return;
+    try {
+      await refreshSidebar();
+    } catch (error) {
+      console.warn("Не удалось обновить счётчики:", error);
+    }
+  }
+
+  // --------------------------------------
   // ОТОБРАЖЕНИЕ СООБЩЕНИЙ
   // --------------------------------------
 
   async function renderMessages(rows, kind) {
+    let otherReadAt = null;
+    if (kind === "class") {
+      otherReadAt = await getChatReadAt("class", currentClass.id);
+    } else if (kind === "group" && selectedGroup) {
+      otherReadAt = await getChatReadAt("group", selectedGroup.id);
+    } else if (kind === "personal" && selectedPerson) {
+      otherReadAt = await getChatReadAt("private", currentClass.id, selectedPerson.id);
+    }
+
     const fragment = document.createDocumentFragment();
 
     if (!rows?.length) {
@@ -1117,6 +1231,10 @@ async function showMessenger() {
         makeElement("time", "message-time", formatTime(item.created_at))
       );
 
+      if (mine && otherReadAt && new Date(otherReadAt) >= new Date(item.created_at)) {
+        footer.append(makeElement("span", "read-receipt", "✓✓ Прочитано"));
+      }
+
       const canDelete =
         mine ||
         (kind === "class" && currentProfile.role === "teacher") ||
@@ -1153,7 +1271,9 @@ async function showMessenger() {
     if (error) throw error;
 
     await renderMessages(data, "class");
+    await markChatRead("class", currentClass.id);
     status.textContent = "Общий чат класса";
+    await refreshUnreadBadges();
   }
 
   async function loadPersonalMessages() {
@@ -1177,9 +1297,11 @@ async function showMessenger() {
     if (error) throw error;
 
     await renderMessages(data, "personal");
+    await markChatRead("private", currentClass.id, selectedPerson.id);
 
     status.textContent =
       "Личная переписка · " + selectedPerson.username;
+    await refreshSidebar();
   }
 
   async function loadGroupMessages() {
@@ -1197,9 +1319,11 @@ async function showMessenger() {
     if (error) throw error;
 
     await renderMessages(data, "group");
+    await markChatRead("group", selectedGroup.id);
 
     status.textContent =
       "Групповой чат · " + selectedGroup.name;
+    await refreshUnreadBadges();
   }
 
   // --------------------------------------
@@ -1895,6 +2019,8 @@ async function showMessenger() {
           loadClassMessages().catch(error => {
             status.textContent = readableError(error);
           });
+        } else {
+          refreshUnreadBadges();
         }
       }
     )
@@ -1926,6 +2052,8 @@ async function showMessenger() {
           )
         ) {
           loadPersonalMessages();
+        } else {
+          refreshSidebar();
         }
       }
     )
@@ -1946,7 +2074,33 @@ async function showMessenger() {
           item?.chat_id === selectedGroup.id
         ) {
           loadGroupMessages();
+        } else {
+          refreshUnreadBadges();
         }
+      }
+    )
+
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "chat_read_states"
+      },
+      payload => {
+        const state = payload.new || payload.old;
+        if (!state || state.user_id === currentUser.id) return;
+
+        if (
+          (state.chat_type === "class" && state.chat_id === currentClass.id && activeMode === "class") ||
+          (state.chat_type === "group" && selectedGroup?.id === state.chat_id && activeMode === "group") ||
+          (state.chat_type === "private" && selectedPerson?.id === state.user_id && state.peer_id === currentUser.id && activeMode === "personal")
+        ) {
+          if (activeMode === "class") loadClassMessages();
+          else if (activeMode === "group") loadGroupMessages();
+          else if (activeMode === "personal") loadPersonalMessages();
+        }
+        refreshSidebar();
       }
     )
 
