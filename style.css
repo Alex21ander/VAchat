@@ -1162,3 +1162,141 @@ button:disabled {
     overflow-y: auto;
   }
 }
+
+
+/* Вызовы учителя */
+.person-row-with-action {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  margin-bottom: 5px;
+}
+.person-row-with-action .person-item {
+  flex: 1;
+  min-width: 0;
+}
+.teacher-call-mini-btn {
+  flex-shrink: 0;
+  padding: 7px 8px;
+  border: 1px solid #d7def0;
+  border-radius: 8px;
+  background: #fff;
+  color: #315fc9;
+  font-size: 11px;
+  font-weight: 700;
+}
+.teacher-call-mini-btn:hover { background: #edf3ff; }
+.call-modal-description {
+  margin-bottom: 15px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.teacher-calls-list { display: flex; flex-direction: column; gap: 10px; }
+.teacher-call-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8faff;
+}
+.teacher-call-card p { line-height: 1.5; overflow-wrap: anywhere; }
+.call-pending, .call-acknowledged { font-size: 12px; font-weight: 700; }
+.call-pending { color: #b7791f; }
+.call-acknowledged { color: #15803d; }
+.theme-toggle-btn, .calls-open-btn { white-space: nowrap; }
+
+/* Тёмная тема: переключается атрибутом data-theme на html */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  color: #e5e7eb;
+  background: #0b1220;
+}
+:root[data-theme="dark"] body {
+  color: #e5e7eb;
+  background: linear-gradient(135deg, #0b1220, #111827, #172033);
+}
+:root[data-theme="dark"] .auth-card,
+:root[data-theme="dark"] .messenger,
+:root[data-theme="dark"] .chat-panel,
+:root[data-theme="dark"] .va-modal {
+  color: #e5e7eb;
+  background: #182235;
+}
+:root[data-theme="dark"] .topbar,
+:root[data-theme="dark"] .chat-heading,
+:root[data-theme="dark"] .composer,
+:root[data-theme="dark"] .va-modal-header,
+:root[data-theme="dark"] .va-modal-footer {
+  border-color: #334155;
+  background: #182235;
+}
+:root[data-theme="dark"] .sidebar { background: #111b2c; border-color: #334155; }
+:root[data-theme="dark"] .chat-layout { border-color: #334155; }
+:root[data-theme="dark"] .chat-messages { background: #0f1929; }
+:root[data-theme="dark"] .chat-message { color: #e5e7eb; background: #1e293b; border-color: #334155; }
+:root[data-theme="dark"] .chat-message.mine { background: #243b63; border-color: #365786; }
+:root[data-theme="dark"] .chat-tabs,
+:root[data-theme="dark"] .tabs { background: #111b2c; }
+:root[data-theme="dark"] .tab,
+:root[data-theme="dark"] .chat-tab { color: #cbd5e1; }
+:root[data-theme="dark"] .tab.active,
+:root[data-theme="dark"] .chat-tab.active { color: #bfdbfe; background: #263752; }
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .field select,
+:root[data-theme="dark"] .field textarea,
+:root[data-theme="dark"] .composer textarea,
+:root[data-theme="dark"] .va-field input,
+:root[data-theme="dark"] .va-field textarea,
+:root[data-theme="dark"] .member-search {
+  color: #e5e7eb;
+  background: #0f1929;
+  border-color: #475569;
+}
+:root[data-theme="dark"] .field input::placeholder,
+:root[data-theme="dark"] .composer textarea::placeholder,
+:root[data-theme="dark"] .va-field textarea::placeholder { color: #94a3b8; }
+:root[data-theme="dark"] .secondary-btn,
+:root[data-theme="dark"] .va-secondary-btn,
+:root[data-theme="dark"] .va-modal-close { color: #e2e8f0; background: #334155; border-color: #475569; }
+:root[data-theme="dark"] .person-item { color: #e2e8f0; }
+:root[data-theme="dark"] .person-item:hover,
+:root[data-theme="dark"] .person-item.active,
+:root[data-theme="dark"] .class-item.active { color: #bfdbfe; background: #263752; }
+:root[data-theme="dark"] .person-name,
+:root[data-theme="dark"] .presence-person-name,
+:root[data-theme="dark"] .chat-heading h2,
+:root[data-theme="dark"] .va-modal-header h2,
+:root[data-theme="dark"] .message-body { color: #e5e7eb; }
+:root[data-theme="dark"] .presence-person,
+:root[data-theme="dark"] .member-item,
+:root[data-theme="dark"] .member-select-item,
+:root[data-theme="dark"] .teacher-call-card { color: #e5e7eb; background: #1e293b; border-color: #334155; }
+:root[data-theme="dark"] .presence-btn,
+:root[data-theme="dark"] .teacher-call-mini-btn { color: #e2e8f0; background: #263449; border-color: #475569; }
+:root[data-theme="dark"] .presence-btn-in.active { color: #86efac; background: #123524; border-color: #166534; }
+:root[data-theme="dark"] .presence-btn-out.active { color: #cbd5e1; background: #334155; }
+:root[data-theme="dark"] .presence-pill { color: #cbd5e1; background: #334155; }
+:root[data-theme="dark"] .presence-pill.is-present { color: #86efac; background: #123524; }
+:root[data-theme="dark"] .avatar { color: #bfdbfe; background: #263752; }
+:root[data-theme="dark"] .brand p,
+:root[data-theme="dark"] .chat-heading p,
+:root[data-theme="dark"] .subtitle,
+:root[data-theme="dark"] .hint,
+:root[data-theme="dark"] .field small,
+:root[data-theme="dark"] .status-line,
+:root[data-theme="dark"] .call-modal-description { color: #94a3b8; }
+:root[data-theme="dark"] .va-field label { color: #cbd5e1; }
+:root[data-theme="dark"] .va-modal-overlay { background: rgba(0, 0, 0, .72); }
+:root[data-theme="dark"] .delete-message-btn,
+:root[data-theme="dark"] .member-remove { background: #42232b; color: #fda4af; }
+:root[data-theme="dark"] .logo { background: #263752; }
+:root[data-theme="dark"] .brand-icon { background: #263752; }
+
+@media (max-width: 700px) {
+  .topbar { flex-wrap: wrap; gap: 8px; }
+  .theme-toggle-btn, .calls-open-btn { flex: 1; }
+}

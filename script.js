@@ -173,6 +173,21 @@ function initials(name) {
 }
 
 // ======================================
+// ТЕМА ОФОРМЛЕНИЯ
+// ======================================
+
+function getSavedTheme() {
+  return localStorage.getItem("vachat_theme") === "dark" ? "dark" : "light";
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("vachat_theme", theme);
+}
+
+applyTheme(getSavedTheme());
+
+// ======================================
 // МОДАЛЬНЫЕ ОКНА
 // ======================================
 
@@ -515,13 +530,23 @@ async function showMessenger() {
     changeAvatar
   );
 
+  const themeBtn = makeButton(
+    getSavedTheme() === "dark" ? "☀️ Светлая тема" : "🌙 Тёмная тема",
+    "secondary-btn theme-toggle-btn",
+    () => {
+      const nextTheme = getSavedTheme() === "dark" ? "light" : "dark";
+      applyTheme(nextTheme);
+      themeBtn.textContent = nextTheme === "dark" ? "☀️ Светлая тема" : "🌙 Тёмная тема";
+    }
+  );
+
   const logoutBtn = makeButton(
     "Выйти",
     "secondary-btn",
     logout
   );
 
-  topbar.append(brand, identity, avatarBtn, logoutBtn);
+  topbar.append(brand, identity, avatarBtn, themeBtn, logoutBtn);
 
   const tabs = makeElement("div", "chat-tabs");
 
@@ -761,6 +786,112 @@ async function showMessenger() {
     presencePanel.append(list);
   }
 
+  async function openCreateCallModal(student) {
+    const content = makeElement("div");
+    const description = makeElement("p", "call-modal-description", `Ученик: ${student.username}. Укажи, зачем нужно подойти.`);
+    const field = makeElement("div", "va-field");
+    const label = makeElement("label", "", "Причина вызова");
+    const reason = makeElement("textarea", "", "");
+    reason.rows = 4;
+    reason.maxLength = 500;
+    reason.placeholder = "Например: обсудить домашнее задание...";
+    field.append(label, reason);
+    content.append(description, field);
+
+    const modal = openModal("Вызвать ученика", content, [
+      {
+        text: "Отправить вызов",
+        className: "va-primary-btn",
+        callback: async overlay => {
+          const text = reason.value.trim();
+          if (text.length < 3) {
+            reason.focus();
+            status.textContent = "Напиши причину вызова (минимум 3 символа).";
+            return;
+          }
+          const send = overlay.querySelector(".va-primary-btn");
+          if (send) send.disabled = true;
+          try {
+            const { error } = await db.from("teacher_calls").insert({
+              class_id: currentClass.id,
+              teacher_id: currentUser.id,
+              student_id: student.id,
+              reason: text
+            });
+            if (error) throw error;
+            modal.close();
+            status.textContent = `Вызов для ${student.username} отправлен.`;
+          } catch (error) {
+            if (send) send.disabled = false;
+            status.textContent = "Не удалось отправить вызов: " + readableError(error);
+          }
+        }
+      }
+    ]);
+    reason.focus();
+  }
+
+  async function loadMyCalls() {
+    const column = currentProfile.role === "teacher" ? "teacher_id" : "student_id";
+    const { data, error } = await db
+      .from("teacher_calls")
+      .select("id, class_id, teacher_id, student_id, reason, created_at, acknowledged_at")
+      .eq(column, currentUser.id)
+      .eq("class_id", currentClass.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function openCallsModal() {
+    const content = makeElement("div", "teacher-calls-list");
+    const modal = openModal(currentProfile.role === "teacher" ? "Отправленные вызовы" : "Вызовы учителя", content);
+    content.append(makeElement("p", "call-modal-description", "Здесь отображаются вызовы по текущему классу."));
+    try {
+      const calls = await loadMyCalls();
+      if (!calls.length) {
+        content.append(makeElement("p", "presence-empty", "Вызовов пока нет."));
+        return;
+      }
+      for (const call of calls) {
+        const card = makeElement("article", "teacher-call-card");
+        const otherId = currentProfile.role === "teacher" ? call.student_id : call.teacher_id;
+        const other = classmates.find(person => person.id === otherId);
+        const personName = other?.username || (currentProfile.role === "teacher" ? "Ученик" : "Учитель");
+        card.append(
+          makeElement("strong", "", currentProfile.role === "teacher" ? `Кому: ${personName}` : `От: ${personName}`),
+          makeElement("p", "", call.reason),
+          makeElement("time", "message-time", formatTime(call.created_at))
+        );
+        if (currentProfile.role === "student") {
+          card.append(makeElement("span", call.acknowledged_at ? "call-acknowledged" : "call-pending", call.acknowledged_at ? "Отмечено как прочитанное" : "Ожидает подтверждения"));
+          if (!call.acknowledged_at) {
+            card.append(makeButton("Понятно", "va-primary-btn", async () => {
+              const { error } = await db.from("teacher_calls").update({ acknowledged_at: new Date().toISOString() }).eq("id", call.id);
+              if (error) {
+                status.textContent = "Не удалось подтвердить вызов: " + readableError(error);
+                return;
+              }
+              modal.close();
+              openCallsModal();
+            }));
+          }
+        }
+        content.append(card);
+      }
+    } catch (error) {
+      content.append(makeElement("p", "message error", "Не удалось загрузить вызовы: " + readableError(error)));
+    }
+  }
+
+  const callsButton = makeButton(
+    currentProfile.role === "teacher" ? "Мои вызовы" : "Вызовы учителя",
+    "secondary-btn calls-open-btn",
+    openCallsModal
+  );
+  topbar.append(callsButton);
+
   async function refreshSidebar() {
     sidebar.replaceChildren(
       makeElement(
@@ -813,6 +944,7 @@ async function showMessenger() {
 
     } else {
       for (const person of classmates) {
+        const personRow = makeElement("div", "person-row-with-action");
         const button = makeButton(
           "",
           "person-item" +
@@ -824,8 +956,15 @@ async function showMessenger() {
           await makeAvatar(person),
           makeElement("span", "person-name", person.username)
         );
+        personRow.append(button);
 
-        sidebar.append(button);
+        if (currentProfile.role === "teacher" && person.role === "student") {
+          personRow.append(
+            makeButton("Вызвать", "teacher-call-mini-btn", () => openCreateCallModal(person))
+          );
+        }
+
+        sidebar.append(personRow);
       }
 
       if (!classmates.length) {
@@ -871,7 +1010,7 @@ async function showMessenger() {
 
     const { data, error: profileError } = await db
       .from("profiles")
-      .select("id, username, avatar_path")
+      .select("id, username, avatar_path, role")
       .in("id", ids)
       .order("username");
 
@@ -1807,6 +1946,25 @@ async function showMessenger() {
           item?.chat_id === selectedGroup.id
         ) {
           loadGroupMessages();
+        }
+      }
+    )
+
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "teacher_calls",
+        filter: "class_id=eq." + currentClass.id
+      },
+      payload => {
+        const call = payload.new;
+        if (currentProfile.role === "student" && call?.student_id === currentUser.id) {
+          status.textContent = "У тебя новый вызов от учителя. Открой «Вызовы учителя».";
+          openCallsModal();
+        } else if (currentProfile.role === "teacher" && call?.teacher_id === currentUser.id) {
+          status.textContent = "Вызов ученику отправлен.";
         }
       }
     )
