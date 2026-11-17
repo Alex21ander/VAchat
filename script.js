@@ -31,6 +31,7 @@ let currentUser = null;
 let currentProfile = null;
 let currentClass = null;
 let realtimeChannel = null;
+let presenceRefreshTimer = null;
 
 // ======================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -475,6 +476,11 @@ authForm.addEventListener("submit", async event => {
 // ======================================
 
 async function showMessenger() {
+  if (presenceRefreshTimer) {
+    clearInterval(presenceRefreshTimer);
+    presenceRefreshTimer = null;
+  }
+
   if (realtimeChannel) {
     await db.removeChannel(realtimeChannel);
     realtimeChannel = null;
@@ -579,6 +585,8 @@ async function showMessenger() {
   let selectedFile = null;
   let classmates = [];
   let customChats = [];
+  let presenceRows = [];
+  let presencePanel = null;
 
   // --------------------------------------
   // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ИНТЕРФЕЙСА
@@ -617,6 +625,140 @@ async function showMessenger() {
     );
 
     return button;
+  }
+
+  function localDateString() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function isPresentToday(row) {
+    return Boolean(
+      row &&
+      row.is_at_school &&
+      row.presence_date === localDateString()
+    );
+  }
+
+  async function loadPresence() {
+    const { data, error } = await db
+      .from("school_presence")
+      .select("user_id, is_at_school, presence_date");
+
+    if (error) throw error;
+    presenceRows = data || [];
+  }
+
+  async function setMyPresence(isAtSchool) {
+    const today = localDateString();
+    const existing = presenceRows.find(
+      row => row.user_id === currentUser.id
+    );
+
+    let result;
+
+    if (existing) {
+      result = await db
+        .from("school_presence")
+        .update({
+          is_at_school: isAtSchool,
+          presence_date: today
+        })
+        .eq("user_id", currentUser.id);
+    } else {
+      result = await db
+        .from("school_presence")
+        .insert({
+          user_id: currentUser.id,
+          is_at_school: isAtSchool,
+          presence_date: today
+        });
+    }
+
+    if (result.error) throw result.error;
+
+    await loadPresence();
+    renderPresencePanel();
+  }
+
+  function renderPresencePanel() {
+    if (!presencePanel) return;
+
+    presencePanel.replaceChildren();
+    presencePanel.append(
+      makeElement("p", "sidebar-caption", "Присутствие в школе")
+    );
+
+    const ownRow = presenceRows.find(
+      row => row.user_id === currentUser.id
+    );
+    const ownPresent = isPresentToday(ownRow);
+
+    const ownStatus = makeElement(
+      "div",
+      "presence-own-status" + (ownPresent ? " is-present" : ""),
+      ownPresent ? "● Сейчас ты в школе" : "● Сейчас ты не в школе"
+    );
+    presencePanel.append(ownStatus);
+
+    const controls = makeElement("div", "presence-controls");
+    const arriveButton = makeButton(
+      "Я в школе",
+      "presence-btn presence-btn-in" + (ownPresent ? " active" : ""),
+      async () => {
+        arriveButton.disabled = true;
+        try {
+          await setMyPresence(true);
+        } catch (error) {
+          status.textContent = "Не удалось изменить присутствие: " + readableError(error);
+        } finally {
+          arriveButton.disabled = false;
+        }
+      }
+    );
+    const absentButton = makeButton(
+      "Не в школе",
+      "presence-btn presence-btn-out" + (!ownPresent ? " active" : ""),
+      async () => {
+        absentButton.disabled = true;
+        try {
+          await setMyPresence(false);
+        } catch (error) {
+          status.textContent = "Не удалось изменить присутствие: " + readableError(error);
+        } finally {
+          absentButton.disabled = false;
+        }
+      }
+    );
+    controls.append(arriveButton, absentButton);
+    presencePanel.append(controls);
+
+    const list = makeElement("div", "presence-list");
+    for (const person of classmates) {
+      const row = presenceRows.find(item => item.user_id === person.id);
+      const present = isPresentToday(row);
+      const item = makeElement("div", "presence-person");
+      item.append(
+        makeElement("span", "presence-person-name", person.username),
+        makeElement(
+          "span",
+          "presence-pill" + (present ? " is-present" : ""),
+          present ? "В школе" : "Не в школе"
+        )
+      );
+      list.append(item);
+    }
+
+    if (!classmates.length) {
+      list.append(
+        makeElement("p", "presence-empty", "Пока нет других участников класса.")
+      );
+    }
+
+    presencePanel.append(list);
   }
 
   async function refreshSidebar() {
@@ -696,6 +838,12 @@ async function showMessenger() {
         );
       }
     }
+
+    if (!presencePanel) {
+      presencePanel = makeElement("section", "presence-panel");
+    }
+    sidebar.append(presencePanel);
+    renderPresencePanel();
   }
 
   // --------------------------------------
@@ -1576,9 +1724,17 @@ async function showMessenger() {
   // ПЕРВОНАЧАЛЬНАЯ ЗАГРУЗКА
   // --------------------------------------
 
+  await loadClassmates();
   await loadCustomChats();
+  await loadPresence();
   await refreshSidebar();
   await loadClassMessages();
+
+  // Если страница остаётся открытой через полночь,
+  // вчерашняя отметка автоматически отображается как «Не в школе».
+  presenceRefreshTimer = setInterval(() => {
+    renderPresencePanel();
+  }, 60 * 1000);
 
   // --------------------------------------
   // ОБНОВЛЕНИЯ В РЕАЛЬНОМ ВРЕМЕНИ
@@ -1655,6 +1811,22 @@ async function showMessenger() {
       }
     )
 
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "school_presence"
+      },
+      () => {
+        loadPresence()
+          .then(() => renderPresencePanel())
+          .catch(error => {
+            status.textContent = "Не удалось обновить присутствие: " + readableError(error);
+          });
+      }
+    )
+
     .subscribe(state => {
       if (state === "SUBSCRIBED") {
         status.textContent = "Онлайн · " + currentProfile.username;
@@ -1671,6 +1843,11 @@ async function showMessenger() {
 // ======================================
 
 async function logout() {
+  if (presenceRefreshTimer) {
+    clearInterval(presenceRefreshTimer);
+    presenceRefreshTimer = null;
+  }
+
   if (realtimeChannel) {
     await db.removeChannel(realtimeChannel);
     realtimeChannel = null;

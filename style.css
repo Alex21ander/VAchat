@@ -1062,3 +1062,103 @@ button:disabled {
     padding-right: 15px;
   }
 }
+
+/* Присутствие в школе */
+.presence-panel {
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e9f2;
+}
+
+.presence-own-status {
+  margin: 8px 4px 10px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.presence-own-status.is-present {
+  color: #15803d;
+}
+
+.presence-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.presence-btn {
+  min-width: 0;
+  padding: 9px 6px;
+  border: 1px solid #dce2ec;
+  border-radius: 9px;
+  background: #fff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.presence-btn-in.active {
+  border-color: #86d5a0;
+  background: #eaf8ee;
+  color: #15803d;
+}
+
+.presence-btn-out.active {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.presence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.presence-person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 5px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.presence-person-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: #334155;
+}
+
+.presence-pill {
+  flex-shrink: 0;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.presence-pill.is-present {
+  background: #eaf8ee;
+  color: #15803d;
+}
+
+.presence-empty {
+  padding: 6px 4px;
+  color: #8992a5;
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .presence-panel {
+    max-height: 240px;
+    overflow-y: auto;
+  }
+}
