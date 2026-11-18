@@ -699,12 +699,35 @@ async function showMessenger() {
   }
 
   function setHeading(title, subtitle, extra = null) {
-    heading.replaceChildren(
+    heading.replaceChildren();
+
+    // На телефоне открытый диалог занимает весь экран; кнопка возвращает
+    // к списку чатов, как в мобильных мессенджерах.
+    if (layout.classList.contains("mobile-chat-open")) {
+      heading.append(makeButton("‹", "mobile-back-btn", showMobileChatList));
+    }
+
+    const titleBlock = makeElement("div", "chat-heading-title");
+    titleBlock.append(
       makeElement("h2", "", title),
       makeElement("p", "", subtitle)
     );
+    heading.append(titleBlock);
 
     if (extra) heading.append(extra);
+  }
+
+  async function showMobileChatList() {
+    selectedPerson = null;
+    selectedGroup = null;
+    layout.classList.remove("mobile-chat-open");
+    setHeading(
+      activeMode === "personal" ? "Личные сообщения" : "Мои чаты",
+      "Выбери чат, чтобы открыть переписку"
+    );
+    showEmpty("Выбери чат из списка, чтобы увидеть сообщения.");
+    status.textContent = "Список чатов";
+    await refreshSidebar();
   }
 
   function showEmpty(text) {
@@ -1450,6 +1473,7 @@ async function showMessenger() {
     selectedPerson = person;
     selectedGroup = null;
     activeMode = "personal";
+    layout.classList.add("mobile-chat-open");
 
     setActiveTab("personal");
 
@@ -1467,6 +1491,7 @@ async function showMessenger() {
     selectedGroup = chat;
     selectedPerson = null;
     activeMode = "group";
+    layout.classList.add("mobile-chat-open");
 
     setActiveTab("");
 
@@ -1495,6 +1520,7 @@ async function showMessenger() {
     selectedPerson = null;
     selectedGroup = null;
     activeMode = which;
+    layout.classList.remove("mobile-chat-open");
 
     setActiveTab(which);
 
@@ -2110,6 +2136,8 @@ async function showMessenger() {
     loadPresence()
   ]);
   await refreshSidebar();
+  layout.classList.add("mobile-chat-open");
+  setHeading(currentClass.name, "Общий чат класса");
   await loadClassMessages();
 
   // Если страница остаётся открытой через полночь,
