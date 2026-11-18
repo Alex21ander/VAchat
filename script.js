@@ -1042,7 +1042,7 @@ async function showMessenger() {
       const classButton = sidebarButton(
         "Классный чат",
         "К",
-        () => switchTab("class"),
+        () => openClassChat(),
         activeMode === "class"
       );
       addUnreadBadge(classButton, unreadCounts.get(`class:${currentClass.id}`) || 0);
@@ -1469,6 +1469,19 @@ async function showMessenger() {
   // ОТКРЫТИЕ ЧАТОВ
   // --------------------------------------
 
+  async function openClassChat() {
+    selectedPerson = null;
+    selectedGroup = null;
+    activeMode = "class";
+    setActiveTab("class");
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      layout.classList.add("mobile-chat-open");
+    }
+    setHeading(currentClass.name, "Общий чат класса");
+    textarea.placeholder = "Напиши сообщение...";
+    await loadClassMessages();
+  }
+
   async function openPersonalChat(person) {
     selectedPerson = person;
     selectedGroup = null;
@@ -1526,6 +1539,9 @@ async function showMessenger() {
 
     if (which === "class") {
       textarea.placeholder = "Напиши сообщение...";
+      if (window.matchMedia("(max-width: 760px)").matches) {
+        layout.classList.add("mobile-chat-open");
+      }
 
       await refreshSidebar();
 
@@ -2136,9 +2152,15 @@ async function showMessenger() {
     loadPresence()
   ]);
   await refreshSidebar();
-  layout.classList.add("mobile-chat-open");
-  setHeading(currentClass.name, "Общий чат класса");
-  await loadClassMessages();
+  if (window.matchMedia("(max-width: 760px)").matches) {
+    layout.classList.remove("mobile-chat-open");
+    setHeading("Мои чаты", "Выбери чат, чтобы открыть переписку");
+    showEmpty("Выбери чат из списка, чтобы увидеть сообщения.");
+    status.textContent = "Список чатов";
+  } else {
+    setHeading(currentClass.name, "Общий чат класса");
+    await loadClassMessages();
+  }
 
   // Если страница остаётся открытой через полночь,
   // вчерашняя отметка автоматически отображается как «Не в школе».
