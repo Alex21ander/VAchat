@@ -1368,3 +1368,485 @@ button:disabled {
   border-radius: 12px;
   background: #111827;
 }
+
+/* =====================================================
+   VA CHAT — адаптивный полноэкранный интерфейс
+   Визуальный стиль: аккуратный мессенджер, вдохновлённый
+   привычной компоновкой Telegram (без копирования бренда).
+   ===================================================== */
+
+:root {
+  --va-blue: #2481cc;
+  --va-blue-strong: #1976c9;
+  --va-blue-soft: #e8f3fc;
+  --va-page: #eaf0f5;
+  --va-border: #e4eaf0;
+  --va-text: #182533;
+  --va-muted: #80909f;
+  --va-sidebar: #ffffff;
+  --va-panel: #ffffff;
+  --va-chat-bg: #e9eff4;
+}
+
+html, body {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 0;
+  overflow: hidden;
+  color: var(--va-text);
+  background: var(--va-page);
+}
+
+#app {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  overflow: hidden;
+}
+
+/* Экран входа остаётся компактным и центрированным */
+#app > .auth-card {
+  align-self: center;
+  margin: 20px auto;
+  max-height: calc(100% - 40px);
+  overflow-y: auto;
+}
+
+/* Полноэкранная рабочая область на ПК и телефонах */
+.messenger {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: var(--va-panel);
+  box-shadow: none;
+}
+
+.topbar {
+  flex: 0 0 auto;
+  min-height: 68px;
+  padding: 10px 20px;
+  gap: 10px;
+  border-bottom: 1px solid var(--va-border);
+  background: #fff;
+}
+
+.brand { flex: 0 0 auto; gap: 10px; }
+.brand-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: #e5f2fc;
+  color: var(--va-blue);
+}
+.brand h1 { color: #172b3a; font-size: 19px; }
+.brand p { color: #8796a3; }
+.user-identity {
+  min-width: 0;
+  max-width: 240px;
+  margin: 0 auto 0 8px;
+  padding: 8px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: #f2f6f9;
+  color: #526575;
+  font-size: 13px;
+}
+.topbar .secondary-btn {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-color: #e2eaf0;
+  border-radius: 10px;
+  background: #fff;
+  color: #4d6070;
+  font-size: 12px;
+  font-weight: 600;
+}
+.topbar .secondary-btn:hover { background: #f2f7fb; }
+
+.chat-tabs {
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  margin: 10px 16px 0;
+  padding: 4px;
+  gap: 4px;
+  border-radius: 12px;
+  background: #f0f4f7;
+}
+.chat-tab {
+  min-width: 140px;
+  padding: 9px 16px;
+  border-radius: 9px;
+  color: #637586;
+  font-size: 13px;
+  font-weight: 600;
+}
+.chat-tab.active {
+  color: #1674b9;
+  background: #fff;
+  box-shadow: 0 1px 4px #1e344410;
+}
+
+.chat-layout {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+  margin: 10px 16px 16px;
+  border: 1px solid var(--va-border);
+  border-radius: 15px;
+  background: #fff;
+}
+.sidebar {
+  min-width: 0;
+  min-height: 0;
+  padding: 15px 11px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-right: 1px solid var(--va-border);
+  background: var(--va-sidebar);
+  overscroll-behavior: contain;
+}
+.sidebar h2 {
+  margin: 2px 10px 12px;
+  color: #8a9aa7;
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+.sidebar-caption {
+  margin: 15px 10px 7px;
+  color: #8b9aa7;
+  font-size: 10px;
+  letter-spacing: .07em;
+}
+.person-item, .class-item {
+  min-height: 54px;
+  padding: 7px 9px;
+  gap: 10px;
+  border-radius: 11px;
+  color: #273b4a;
+  transition: background .15s ease, color .15s ease;
+}
+.person-item:hover, .class-item:hover { background: #f2f7fb; }
+.person-item.active, .class-item.active {
+  color: #176fae;
+  background: #e9f4fc;
+}
+.person-item .avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  font-size: 14px;
+}
+.person-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+.person-row-with-action { gap: 4px; }
+.teacher-call-mini-btn {
+  padding: 7px 8px;
+  border-color: #e2eaf0;
+  background: #f8fafc;
+}
+.create-chat-btn {
+  margin: 8px 0 12px;
+  padding: 10px;
+  border: 1px dashed #b9d3e6;
+  border-radius: 10px;
+  background: #f6fbff;
+  color: #247bb8;
+  font-size: 12px;
+}
+.unread-badge {
+  min-width: 21px;
+  height: 21px;
+  padding: 0 6px;
+  background: #2a91d1;
+  font-size: 11px;
+}
+
+.chat-panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--va-panel);
+}
+.chat-heading {
+  flex: 0 0 auto;
+  min-height: 66px;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--va-border);
+  background: #fff;
+}
+.chat-heading h2 { color: #1d3040; font-size: 16px; }
+.chat-heading p { color: #8a99a6; font-size: 12px; }
+.heading-actions { margin-top: 0; }
+.heading-actions button { border-radius: 9px; }
+.chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  padding: 22px clamp(14px, 3vw, 42px);
+  gap: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background-color: var(--va-chat-bg);
+  background-image: radial-gradient(#b9cbd8 0.65px, transparent 0.65px);
+  background-size: 18px 18px;
+  overscroll-behavior: contain;
+}
+.chat-message {
+  max-width: min(78%, 650px);
+  padding: 10px 13px;
+  border: 1px solid #e2eaf0;
+  border-radius: 5px 14px 14px 14px;
+  background: #fff;
+  box-shadow: 0 1px 1px #24394a0b;
+  color: #253746;
+  line-height: 1.45;
+}
+.chat-message.mine {
+  border-color: #c9e4f7;
+  border-radius: 14px 5px 14px 14px;
+  background: #e5f4ff;
+}
+.message-author { color: #2780ba; }
+.message-time { color: #8a9aa6; }
+.message-video { width: min(100%, 460px); max-height: 380px; }
+.message-image { max-width: min(100%, 420px); }
+.message-footer { align-items: center; }
+.read-receipt { color: #2691ce; }
+
+.composer {
+  flex: 0 0 auto;
+  align-items: flex-end;
+  gap: 9px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--va-border);
+  background: #fff;
+}
+.composer textarea {
+  min-height: 44px;
+  max-height: 140px;
+  padding: 12px 14px;
+  border: 1px solid #dce6ed;
+  border-radius: 13px;
+  background: #f8fafc;
+  color: #233746;
+  line-height: 1.4;
+}
+.composer textarea:focus {
+  border-color: #80bce1;
+  box-shadow: 0 0 0 3px #2481cc16;
+  background: #fff;
+}
+.attach-btn {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border: 1px solid #e1eaf0;
+  border-radius: 12px;
+  background: #f5f8fa;
+  color: #60798b;
+}
+.send-btn {
+  min-height: 44px;
+  padding: 0 19px;
+  border-radius: 12px;
+  background: var(--va-blue);
+  box-shadow: 0 2px 5px #2481cc26;
+}
+.send-btn:hover { background: var(--va-blue-strong); }
+.status-line {
+  flex: 0 0 auto;
+  min-height: 20px;
+  padding: 0 18px 7px;
+  background: #fff;
+}
+
+/* Модальные окна не выходят за экран */
+.va-modal-overlay { padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+.va-modal {
+  width: min(100%, 540px);
+  max-height: min(88vh, 760px);
+  max-height: min(88dvh, 760px);
+  border: 1px solid #e6edf2;
+}
+.va-modal-body { min-height: 0; overflow-x: hidden; }
+
+/* Аккуратные полосы прокрутки */
+* { scrollbar-width: thin; scrollbar-color: #c4d1db transparent; }
+*::-webkit-scrollbar { width: 7px; height: 7px; }
+*::-webkit-scrollbar-thumb { border-radius: 20px; background: #c4d1db; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* Тёмная тема в той же компоновке */
+:root[data-theme="dark"] {
+  --va-page: #0e1722;
+  --va-border: #263747;
+  --va-text: #e4edf4;
+  --va-muted: #94a7b6;
+  --va-sidebar: #14212d;
+  --va-panel: #172633;
+  --va-chat-bg: #101d28;
+}
+:root[data-theme="dark"] body { background: #0e1722; color: var(--va-text); }
+:root[data-theme="dark"] .messenger,
+:root[data-theme="dark"] .chat-panel { background: var(--va-panel); }
+:root[data-theme="dark"] .topbar,
+:root[data-theme="dark"] .chat-heading,
+:root[data-theme="dark"] .composer,
+:root[data-theme="dark"] .status-line { background: #172633; border-color: var(--va-border); }
+:root[data-theme="dark"] .brand h1,
+:root[data-theme="dark"] .chat-heading h2 { color: #e5eef5; }
+:root[data-theme="dark"] .brand-icon { background: #203c50; }
+:root[data-theme="dark"] .user-identity { background: #203342; color: #c4d3df; }
+:root[data-theme="dark"] .topbar .secondary-btn { background: #203342; border-color: #304657; color: #d4e0e9; }
+:root[data-theme="dark"] .chat-tabs { background: #101d28; }
+:root[data-theme="dark"] .chat-tab { color: #a8bac8; }
+:root[data-theme="dark"] .chat-tab.active { color: #9bd3fa; background: #20394b; }
+:root[data-theme="dark"] .sidebar { background: var(--va-sidebar); border-color: var(--va-border); }
+:root[data-theme="dark"] .sidebar h2,
+:root[data-theme="dark"] .sidebar-caption { color: #8095a6; }
+:root[data-theme="dark"] .person-item,
+:root[data-theme="dark"] .class-item { color: #d7e3ec; }
+:root[data-theme="dark"] .person-item:hover,
+:root[data-theme="dark"] .person-item.active,
+:root[data-theme="dark"] .class-item.active { color: #9bd3fa; background: #20394b; }
+:root[data-theme="dark"] .person-name { color: inherit; }
+:root[data-theme="dark"] .create-chat-btn { color: #9bd3fa; background: #1b3040; border-color: #36566d; }
+:root[data-theme="dark"] .teacher-call-mini-btn { color: #c6d9e7; background: #203342; border-color: #304657; }
+:root[data-theme="dark"] .chat-messages { background-color: var(--va-chat-bg); background-image: radial-gradient(#263d4e 0.65px, transparent 0.65px); }
+:root[data-theme="dark"] .chat-message { color: #e1ebf2; background: #1b2c39; border-color: #2c4252; }
+:root[data-theme="dark"] .chat-message.mine { color: #e1edf5; background: #203c50; border-color: #31566e; }
+:root[data-theme="dark"] .composer textarea { color: #e5eef5; background: #101d28; border-color: #304657; }
+:root[data-theme="dark"] .composer textarea:focus { background: #142633; border-color: #4389b7; }
+:root[data-theme="dark"] .attach-btn { color: #c6d9e7; background: #203342; border-color: #304657; }
+:root[data-theme="dark"] .send-btn { background: #2481cc; }
+:root[data-theme="dark"] .va-modal { background: #172633; border-color: #304657; }
+:root[data-theme="dark"] .va-modal-header,
+:root[data-theme="dark"] .va-modal-footer { background: #172633; border-color: #304657; }
+:root[data-theme="dark"] .va-modal-header h2 { color: #e5eef5; }
+:root[data-theme="dark"] .teacher-call-card { background: #1b2c39; border-color: #304657; }
+:root[data-theme="dark"] * { scrollbar-color: #40576a transparent; }
+
+/* Планшеты и телефоны */
+@media (max-width: 760px) {
+  body { overflow: hidden; }
+  .topbar {
+    min-height: 58px;
+    padding: 8px 10px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .brand { gap: 7px; }
+  .brand-icon { width: 35px; height: 35px; border-radius: 11px; font-size: 19px; }
+  .brand h1 { font-size: 16px; }
+  .brand p { display: none; }
+  .user-identity {
+    order: 2;
+    flex: 1 1 100%;
+    max-width: none;
+    margin: 0;
+    padding: 3px 7px;
+    background: transparent;
+    font-size: 11px;
+  }
+  .topbar .secondary-btn {
+    min-height: 34px;
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+  .chat-tabs {
+    width: auto;
+    max-width: none;
+    margin: 7px 8px 0;
+  }
+  .chat-tab { min-width: 0; flex: 1 1 50%; padding: 9px 7px; font-size: 12px; }
+  .chat-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(94px, 23dvh) minmax(0, 1fr);
+    margin: 7px 8px max(8px, env(safe-area-inset-bottom));
+    border-radius: 12px;
+  }
+  .sidebar {
+    max-height: none;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 7px 8px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--va-border);
+  }
+  .sidebar h2 { margin: 1px 8px 5px; font-size: 10px; }
+  .sidebar-caption { margin: 8px 8px 4px; font-size: 9px; }
+  .person-item, .class-item { min-height: 44px; padding: 5px 7px; gap: 8px; }
+  .person-item .avatar { width: 33px; height: 33px; min-width: 33px; font-size: 12px; }
+  .person-name { font-size: 12px; }
+  .unread-badge { min-width: 19px; height: 19px; font-size: 10px; }
+  .create-chat-btn { margin: 4px 0 6px; padding: 7px; font-size: 11px; }
+  .person-row-with-action { margin-bottom: 2px; }
+  .teacher-call-mini-btn { padding: 6px; font-size: 10px; }
+  .presence-panel { max-height: 150px; overflow-y: auto; }
+  .chat-panel { min-height: 0; }
+  .chat-heading { min-height: 52px; padding: 9px 12px; gap: 8px; }
+  .chat-heading h2 { font-size: 14px; }
+  .chat-heading p { font-size: 11px; }
+  .heading-actions { gap: 5px; }
+  .heading-actions button { padding: 7px 9px; font-size: 11px; }
+  .chat-messages { min-height: 0; max-height: none; padding: 13px 10px; gap: 9px; }
+  .chat-message { max-width: 90%; padding: 9px 11px; font-size: 13px; }
+  .message-image { max-width: min(100%, 260px); max-height: 240px; }
+  .message-video { width: min(100%, 300px); max-height: 240px; }
+  .composer { gap: 6px; padding: 8px; }
+  .composer textarea { min-height: 42px; max-height: 100px; padding: 10px; font-size: 14px; }
+  .attach-btn { width: 40px; min-width: 40px; height: 42px; }
+  .send-btn { min-height: 42px; padding: 0 12px; font-size: 12px; }
+  .status-line { padding: 0 10px 5px; font-size: 10px; }
+  .va-modal-overlay { align-items: flex-end; padding: 8px; }
+  .va-modal { width: 100%; max-height: 90dvh; border-radius: 17px 17px 12px 12px; }
+  .va-modal-header { padding: 15px 16px; }
+  .va-modal-body { padding: 15px 16px; }
+  .va-modal-footer { padding: 12px 16px; }
+}
+
+@media (max-width: 390px) {
+  .topbar { column-gap: 5px; }
+  .topbar .secondary-btn { padding: 6px; font-size: 10px; }
+  .brand h1 { font-size: 15px; }
+  .chat-tab { font-size: 11px; }
+  .send-btn { padding: 0 9px; }
+}
+
+@media (max-height: 620px) and (max-width: 760px) {
+  .chat-layout { grid-template-rows: minmax(76px, 18dvh) minmax(0, 1fr); }
+  .sidebar { padding-top: 5px; padding-bottom: 5px; }
+  .topbar { min-height: 50px; }
+}
