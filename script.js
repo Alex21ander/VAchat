@@ -978,14 +978,24 @@ async function showMessenger() {
   );
   topbar.append(callsButton);
 
-  async function refreshSidebar() {
-    sidebar.replaceChildren(
-      makeElement(
-        "h2",
-        "",
-        activeMode === "personal" ? "Одноклассники" : "Мои чаты"
-      )
+  async function renderSidebarNow() {
+    const sidebarContent = document.createDocumentFragment();
+    sidebarContent.append(
+      makeElement("h2", "", activeMode === "personal" ? "Одноклассники" : "Мои чаты")
     );
+
+    // Загружаем все счётчики параллельно, а не по одному для каждого чата.
+    const unreadKeys = activeMode === "personal"
+      ? classmates.map(person => ["private", currentClass.id, person.id, `private:${person.id}`])
+      : [["class", currentClass.id, null, `class:${currentClass.id}`],
+         ...customChats.map(chat => ["group", chat.id, null, `group:${chat.id}`])];
+    const unreadValues = await Promise.all(unreadKeys.map(([type, id, peer]) =>
+      countUnread(type, id, peer).catch(error => {
+        console.warn("Не удалось получить счётчик непрочитанных:", error);
+        return 0;
+      })
+    ));
+    const unreadCounts = new Map(unreadKeys.map((key, index) => [key[3], unreadValues[index]]));
 
     if (activeMode !== "personal") {
       const classButton = sidebarButton(
@@ -994,10 +1004,10 @@ async function showMessenger() {
         () => switchTab("class"),
         activeMode === "class"
       );
-      addUnreadBadge(classButton, await countUnread("class", currentClass.id));
-      sidebar.append(classButton);
+      addUnreadBadge(classButton, unreadCounts.get(`class:${currentClass.id}`) || 0);
+      sidebarContent.append(classButton);
 
-      sidebar.append(
+      sidebarContent.append(
         makeButton(
           "+ Создать групповой чат",
           "create-chat-btn",
@@ -1005,7 +1015,7 @@ async function showMessenger() {
         )
       );
 
-      sidebar.append(
+      sidebarContent.append(
         makeElement("p", "sidebar-caption", "Групповые чаты")
       );
 
@@ -1024,9 +1034,9 @@ async function showMessenger() {
           }),
           makeElement("span", "person-name", chat.name)
         );
-        addUnreadBadge(button, await countUnread("group", chat.id));
+        addUnreadBadge(button, unreadCounts.get(`group:${chat.id}`) || 0);
 
-        sidebar.append(button);
+        sidebarContent.append(button);
       }
 
     } else {
@@ -1043,7 +1053,7 @@ async function showMessenger() {
           await makeAvatar(person),
           makeElement("span", "person-name", person.username)
         );
-        addUnreadBadge(button, await countUnread("private", currentClass.id, person.id));
+        addUnreadBadge(button, unreadCounts.get(`private:${person.id}`) || 0);
         personRow.append(button);
 
         if (currentProfile.role === "teacher" && person.role === "student") {
@@ -1052,11 +1062,11 @@ async function showMessenger() {
           );
         }
 
-        sidebar.append(personRow);
+        sidebarContent.append(personRow);
       }
 
       if (!classmates.length) {
-        sidebar.append(
+        sidebarContent.append(
           makeElement(
             "p",
             "empty-state",
@@ -1069,8 +1079,31 @@ async function showMessenger() {
     if (!presencePanel) {
       presencePanel = makeElement("section", "presence-panel");
     }
-    sidebar.append(presencePanel);
+    sidebarContent.append(presencePanel);
     renderPresencePanel();
+    sidebar.replaceChildren(sidebarContent);
+  }
+
+
+  // Не допускаем параллельные перерисовки: повторные запросы объединяются.
+  let sidebarRefreshPromise = null;
+  let sidebarRefreshPending = false;
+  async function refreshSidebar() {
+    if (sidebarRefreshPromise) {
+      sidebarRefreshPending = true;
+      return sidebarRefreshPromise;
+    }
+    sidebarRefreshPromise = (async () => {
+      do {
+        sidebarRefreshPending = false;
+        await renderSidebarNow();
+      } while (sidebarRefreshPending);
+    })();
+    try {
+      await sidebarRefreshPromise;
+    } finally {
+      sidebarRefreshPromise = null;
+    }
   }
 
   // --------------------------------------
@@ -1185,13 +1218,18 @@ async function showMessenger() {
     container.append(makeElement("span", "unread-badge", count > 99 ? "99+" : String(count)));
   }
 
+  let sidebarRefreshTimer = null;
+  function scheduleSidebarRefresh() {
+    if (sidebarRefreshTimer) clearTimeout(sidebarRefreshTimer);
+    sidebarRefreshTimer = setTimeout(() => {
+      sidebarRefreshTimer = null;
+      refreshSidebar().catch(error => console.warn("Не удалось обновить список чатов:", error));
+    }, 220);
+  }
+
   async function refreshUnreadBadges() {
     if (activeMode === "personal") return;
-    try {
-      await refreshSidebar();
-    } catch (error) {
-      console.warn("Не удалось обновить счётчики:", error);
-    }
+    scheduleSidebarRefresh();
   }
 
   // --------------------------------------
@@ -2119,7 +2157,7 @@ async function showMessenger() {
         ) {
           loadPersonalMessages();
         } else {
-          refreshSidebar();
+          scheduleSidebarRefresh();
         }
       }
     )
@@ -2166,7 +2204,7 @@ async function showMessenger() {
           else if (activeMode === "group") loadGroupMessages();
           else if (activeMode === "personal") loadPersonalMessages();
         }
-        refreshSidebar();
+        scheduleSidebarRefresh();
       }
     )
 
