@@ -359,19 +359,35 @@ function isVideoMedia(path) {
   return /\.(mp4|webm|mov|m4v|ogv)$/i.test(path || "");
 }
 
+// Кэшируем подписанные ссылки, чтобы при каждом обновлении списка
+// не запрашивать одни и те же аватары повторно.
+const imageUrlCache = new Map();
+const IMAGE_URL_CACHE_MS = 50 * 60 * 1000;
 async function getImageUrl(path) {
   if (!path) return null;
 
-  const { data, error } = await db.storage
+  const cached = imageUrlCache.get(path);
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
+  imageUrlCache.delete(path);
+
+  const promise = db.storage
     .from("chat-media")
-    .createSignedUrl(path, 3600);
+    .createSignedUrl(path, 3600)
+    .then(({ data, error }) => {
+      if (error) throw error;
+      return data?.signedUrl || null;
+    })
+    .catch(error => {
+      console.warn("Ошибка получения изображения:", error.message);
+      imageUrlCache.delete(path);
+      return null;
+    });
 
-  if (error) {
-    console.warn("Ошибка получения изображения:", error.message);
-    return null;
-  }
-
-  return data.signedUrl;
+  imageUrlCache.set(path, {
+    promise,
+    expiresAt: Date.now() + IMAGE_URL_CACHE_MS
+  });
+  return promise;
 }
 
 async function makeAvatar(profile) {
@@ -384,6 +400,8 @@ async function makeAvatar(profile) {
       const img = makeElement("img");
       img.src = url;
       img.alt = "Аватар пользователя";
+      img.loading = "lazy";
+      img.decoding = "async";
       avatar.append(img);
       return avatar;
     }
@@ -1019,28 +1037,24 @@ async function showMessenger() {
         makeElement("p", "sidebar-caption", "Групповые чаты")
       );
 
-      for (const chat of customChats) {
+      const chatButtons = await Promise.all(customChats.map(async chat => {
         const button = makeButton(
           "",
           "person-item" +
           (selectedGroup?.id === chat.id ? " active" : ""),
           () => openCustomChat(chat)
         );
-
         button.append(
-          await makeAvatar({
-            username: chat.name,
-            avatar_path: chat.image_path
-          }),
+          await makeAvatar({ username: chat.name, avatar_path: chat.image_path }),
           makeElement("span", "person-name", chat.name)
         );
         addUnreadBadge(button, unreadCounts.get(`group:${chat.id}`) || 0);
-
-        sidebarContent.append(button);
-      }
+        return button;
+      }));
+      sidebarContent.append(...chatButtons);
 
     } else {
-      for (const person of classmates) {
+      const personRows = await Promise.all(classmates.map(async person => {
         const personRow = makeElement("div", "person-row-with-action");
         const button = makeButton(
           "",
@@ -1048,22 +1062,20 @@ async function showMessenger() {
           (selectedPerson?.id === person.id ? " active" : ""),
           () => openPersonalChat(person)
         );
-
         button.append(
           await makeAvatar(person),
           makeElement("span", "person-name", person.username)
         );
         addUnreadBadge(button, unreadCounts.get(`private:${person.id}`) || 0);
         personRow.append(button);
-
         if (currentProfile.role === "teacher" && person.role === "student") {
           personRow.append(
             makeButton("Вызвать", "teacher-call-mini-btn", () => openCreateCallModal(person))
           );
         }
-
-        sidebarContent.append(personRow);
-      }
+        return personRow;
+      }));
+      sidebarContent.append(...personRows);
 
       if (!classmates.length) {
         sidebarContent.append(
@@ -2091,9 +2103,12 @@ async function showMessenger() {
   // ПЕРВОНАЧАЛЬНАЯ ЗАГРУЗКА
   // --------------------------------------
 
-  await loadClassmates();
-  await loadCustomChats();
-  await loadPresence();
+  // Эти три запроса независимы — выполняем одновременно, а не цепочкой.
+  await Promise.all([
+    loadClassmates(),
+    loadCustomChats(),
+    loadPresence()
+  ]);
   await refreshSidebar();
   await loadClassMessages();
 
