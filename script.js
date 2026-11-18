@@ -272,6 +272,26 @@ function chooseImage() {
   });
 }
 
+// В чатах можно отправлять изображения и видео. Для аватарок
+// по-прежнему используется отдельная функция uploadImage.
+function chooseChatMedia() {
+  return new Promise(resolve => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*,video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov";
+    input.style.display = "none";
+    document.body.append(input);
+
+    input.addEventListener("change", () => {
+      const file = input.files?.[0] || null;
+      input.remove();
+      resolve(file);
+    }, { once: true });
+
+    input.click();
+  });
+}
+
 async function uploadImage(file, folder) {
   if (!file) return null;
 
@@ -300,6 +320,43 @@ async function uploadImage(file, folder) {
   if (error) throw error;
 
   return path;
+}
+
+async function uploadChatMedia(file, folder) {
+  if (!file) return null;
+
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+  if (!isImage && !isVideo) {
+    throw new Error("Можно отправлять только изображения и видео.");
+  }
+
+  const maxSize = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    throw new Error(isVideo
+      ? "Видео должно быть не больше 50 МБ."
+      : "Изображение должно быть не больше 5 МБ.");
+  }
+
+  const extension = (
+    file.name.split(".").pop() || (isVideo ? "mp4" : "jpg")
+  ).toLowerCase().replace(/[^a-z0-9]/g, "") || (isVideo ? "mp4" : "jpg");
+  const path = `${folder}/${crypto.randomUUID()}.${extension}`;
+
+  const { error } = await db.storage
+    .from("chat-media")
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type
+    });
+
+  if (error) throw error;
+  return path;
+}
+
+function isVideoMedia(path) {
+  return /\.(mp4|webm|mov|m4v|ogv)$/i.test(path || "");
 }
 
 async function getImageUrl(path) {
@@ -585,11 +642,12 @@ async function showMessenger() {
     "📎",
     "attach-btn",
     async () => {
-      const file = await chooseImage();
+      const file = await chooseChatMedia();
 
       if (file) {
         selectedFile = file;
-        status.textContent = "Прикреплено: " + file.name;
+        const kind = file.type.startsWith("video/") ? "Видео" : "Изображение";
+        status.textContent = `${kind} прикреплено: ${file.name}`;
       }
     }
   );
@@ -1203,7 +1261,15 @@ async function showMessenger() {
       if (item.image_path) {
         const url = await getImageUrl(item.image_path);
 
-        if (url) {
+        if (url && isVideoMedia(item.image_path)) {
+          const video = makeElement("video", "message-video");
+          video.src = url;
+          video.controls = true;
+          video.playsInline = true;
+          video.preload = "metadata";
+          video.setAttribute("aria-label", "Видео в сообщении");
+          bubble.append(video);
+        } else if (url) {
           const img = makeElement("img", "message-image");
           img.src = url;
           img.alt = "Изображение в сообщении";
@@ -1219,7 +1285,7 @@ async function showMessenger() {
             makeElement(
               "p",
               "message-image-error",
-              "Не удалось загрузить изображение."
+              "Не удалось загрузить файл."
             )
           );
         }
@@ -1921,7 +1987,7 @@ async function showMessenger() {
           folder = `private/${currentClass.id}/${currentUser.id}/${selectedPerson.id}`;
         }
 
-        imagePath = await uploadImage(file, folder);
+        imagePath = await uploadChatMedia(file, folder);
       }
 
       let result;

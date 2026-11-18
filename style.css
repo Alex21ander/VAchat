@@ -1357,3 +1357,14 @@ button:disabled {
 :root[data-theme="dark"] .read-receipt {
   color: #91b7ff;
 }
+
+
+/* Видео в сообщениях */
+.message-video {
+  display: block;
+  width: min(100%, 420px);
+  max-height: 360px;
+  margin-top: 8px;
+  border-radius: 12px;
+  background: #111827;
+}
