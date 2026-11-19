@@ -140,12 +140,8 @@ function readableError(error) {
     return "Это имя уже зарегистрировано. Попробуй войти.";
   }
 
-  if (/email not confirmed/i.test(text)) {
-    return "Подтверди email или отключи обязательное подтверждение для тестового проекта.";
-  }
-
   if (/row-level security|permission denied/i.test(text)) {
-    return "Supabase запретил это действие. Проверь SQL-политики и права доступа.";
+    return "Это действие запрещено.";
   }
 
   return text;
@@ -273,10 +269,6 @@ function chooseChatMedia() {
 async function uploadImage(file, folder) {
   if (!file) return null;
 
-  if (!file.type.startsWith("image/")) {
-    throw new Error("Можно загружать только изображения.");
-  }
-
   if (file.size > 5 * 1024 * 1024) {
     throw new Error("Изображение должно быть не больше 5 МБ.");
   }
@@ -354,7 +346,7 @@ function createLazyVideo(path) {
 
     try {
       const url = await getImageUrl(path);
-      if (!url) throw new Error("Supabase не выдал ссылку на видео.");
+      if (!url) throw new Error("Ссылка на видео не выдана.");
 
       const video = makeElement("video", "message-video");
       video.controls = true;
@@ -1024,7 +1016,7 @@ async function showMessenger() {
 
               if (data !== true) {
                 throw new Error(
-                  "Supabase не подтвердил изменение. Проверь SQL-функцию acknowledge_teacher_call."
+                  "Изменение не подтверждено."
                 );
               }
 
@@ -2321,20 +2313,37 @@ async function logout() {
   location.reload();
 }
 
+function startupWait(promise, label, timeoutMs = 12000) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(
+        `${label}: превышено время ожидания. Проверь интернет и попробуй обновить страницу.`
+      )), timeoutMs);
+    })
+  ]).finally(() => clearTimeout(timer));
+}
+
 async function init() {
   try {
-    const { data, error } = await db.auth.getSession();
+    const { data, error } = await startupWait(
+      db.auth.getSession(),
+      "Не удалось восстановить вход"
+    );
 
     if (error) throw error;
     if (!data.session) return;
 
     currentUser = data.session.user;
 
-    const { data: profile, error: profileError } = await db
-      .from("profiles")
-      .select("id, username, role, avatar_path")
-      .eq("id", currentUser.id)
-      .single();
+    const { data: profile, error: profileError } = await startupWait(
+      db.from("profiles")
+        .select("id, username, role, avatar_path")
+        .eq("id", currentUser.id)
+        .single(),
+      "Не удалось загрузить профиль"
+    );
 
     if (profileError) throw profileError;
     currentProfile = profile;
@@ -2342,40 +2351,48 @@ async function init() {
     let savedClass = null;
 
     if (savedClassId) {
-      const { data: membership, error: membershipError } = await db
-        .from("class_members")
-        .select("class_id")
-        .eq("class_id", savedClassId)
-        .eq("user_id", currentUser.id)
-        .maybeSingle();
+      const { data: membership, error: membershipError } = await startupWait(
+        db.from("class_members")
+          .select("class_id")
+          .eq("class_id", savedClassId)
+          .eq("user_id", currentUser.id)
+          .maybeSingle(),
+        "Не удалось проверить класс"
+      );
       if (membershipError) throw membershipError;
 
       if (membership) {
-        const { data, error: classError } = await db
-          .from("classes")
-          .select("id, name")
-          .eq("id", savedClassId)
-          .single();
+        const { data, error: classError } = await startupWait(
+          db.from("classes")
+            .select("id, name")
+            .eq("id", savedClassId)
+            .single(),
+          "Не удалось загрузить класс"
+        );
         if (classError) throw classError;
         savedClass = data;
       }
     }
 
     if (!savedClass) {
-      const { data: memberships, error: membershipsError } = await db
-        .from("class_members")
-        .select("class_id")
-        .eq("user_id", currentUser.id)
-        .limit(1);
+      const { data: memberships, error: membershipsError } = await startupWait(
+        db.from("class_members")
+          .select("class_id")
+          .eq("user_id", currentUser.id)
+          .limit(1),
+        "Не удалось найти твои классы"
+      );
       if (membershipsError) throw membershipsError;
 
       const firstClassId = memberships?.[0]?.class_id;
       if (firstClassId) {
-        const { data, error: classError } = await db
-          .from("classes")
-          .select("id, name")
-          .eq("id", firstClassId)
-          .single();
+        const { data, error: classError } = await startupWait(
+          db.from("classes")
+            .select("id, name")
+            .eq("id", firstClassId)
+            .single(),
+          "Не удалось загрузить класс"
+        );
         if (classError) throw classError;
         savedClass = data;
       }
@@ -2384,7 +2401,7 @@ async function init() {
     if (savedClass) {
       currentClass = { id: savedClass.id, name: savedClass.name };
       localStorage.setItem("vachat_class_id", savedClass.id);
-      await showMessenger();
+      await startupWait(showMessenger(), "Не удалось открыть чаты", 18000);
       return;
     }
 

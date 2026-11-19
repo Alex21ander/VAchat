@@ -113,7 +113,8 @@
             return;
           }
           status.remove();
-          document.querySelector("#sessionLoading")?.remove();
+          const loading = document.querySelector("#sessionLoading");
+          if (loading) loading.textContent = "Восстанавливаем вход…";
           const appScript = document.createElement("script");
           appScript.src = "script.js";
           appScript.onerror = () => {
@@ -124,6 +125,15 @@
             document.querySelector(".auth-card")?.append(status);
           };
           document.body.append(appScript);
+          window.setTimeout(() => {
+            if (!document.body.classList.contains("session-checking")) return;
+            document.body.classList.remove("session-checking");
+            document.querySelector("#sessionLoading")?.remove();
+            const startupError = document.createElement("p");
+            startupError.className = "message error";
+            startupError.textContent = "Вход загружается слишком долго. Проверь интернет и нажми «Обновить». Если повторяется — войди заново.";
+            document.querySelector(".auth-card")?.append(startupError);
+          }, 25000);
         };
         script.onerror = () => {
           script.remove();
