@@ -169,8 +169,6 @@ button:disabled {
   display: none !important;
 }
 
-/* Основная страница мессенджера */
-
 .messenger {
   width: 100%;
   max-width: 1100px;
@@ -517,8 +515,6 @@ button:disabled {
   opacity: 0.7;
 }
 
-
-/* Аватарки */
 .avatar {
   width: 38px;
   height: 38px;
@@ -539,7 +535,6 @@ button:disabled {
   object-fit: cover;
 }
 
-/* Изображения в сообщениях */
 .message-image {
   display: block;
   max-width: 260px;
@@ -582,7 +577,6 @@ button:disabled {
   text-decoration: underline;
 }
 
-/* Прикрепление файлов */
 .attach-btn {
   min-width: 42px;
   border: none;
@@ -601,7 +595,6 @@ button:disabled {
   min-width: 0;
 }
 
-/* Настройки группы */
 .heading-actions {
   display: flex;
   gap: 8px;
@@ -640,12 +633,6 @@ button:disabled {
   font-size: 12px;
 }
 
-/* ==========================================
-   VA CHAT — ДОПОЛНИТЕЛЬНЫЕ СТИЛИ
-   ========================================== */
-
-/* Аватарки */
-
 .avatar {
   width: 42px;
   height: 42px;
@@ -671,8 +658,6 @@ button:disabled {
 .person-item .avatar {
   flex-shrink: 0;
 }
-
-/* Элементы списка чатов */
 
 .person-item {
   width: 100%;
@@ -727,8 +712,6 @@ button:disabled {
   text-transform: uppercase;
 }
 
-/* Заголовок чата */
-
 .chat-heading {
   display: flex;
   align-items: center;
@@ -758,8 +741,6 @@ button:disabled {
   background: #f2f3ff;
 }
 
-/* Автор сообщения */
-
 .message-author-row {
   display: flex;
   align-items: center;
@@ -781,8 +762,6 @@ button:disabled {
   margin-bottom: 6px;
 }
 
-/* Изображения в сообщениях */
-
 .message-image {
   display: block;
   max-width: min(100%, 340px);
@@ -798,8 +777,6 @@ button:disabled {
   font-size: 12px;
 }
 
-/* Кнопка удаления */
-
 .delete-message-btn {
   border: 0;
   padding: 4px 7px;
@@ -814,8 +791,6 @@ button:disabled {
 .delete-message-btn:hover {
   background: #fff0f0;
 }
-
-/* Модальные окна */
 
 .va-modal-overlay {
   position: fixed;
@@ -907,8 +882,6 @@ button:disabled {
   box-shadow: 0 0 0 3px rgba(119, 127, 224, .13);
 }
 
-/* Список участников */
-
 .member-list {
   display: flex;
   flex-direction: column;
@@ -954,8 +927,6 @@ button:disabled {
   cursor: pointer;
 }
 
-/* Выбор участников при создании группы */
-
 .member-select-list {
   display: flex;
   flex-direction: column;
@@ -983,8 +954,6 @@ button:disabled {
   height: 17px;
 }
 
-/* Поиск участников */
-
 .member-search {
   width: 100%;
   box-sizing: border-box;
@@ -994,8 +963,6 @@ button:disabled {
   border-radius: 10px;
   font: inherit;
 }
-
-/* Кнопки модального окна */
 
 .va-primary-btn,
 .va-danger-btn,
@@ -1025,8 +992,6 @@ button:disabled {
   background: #f0f0f6;
   color: #4d5068;
 }
-
-/* Адаптация под телефон */
 
 @media (max-width: 700px) {
   .chat-layout {
@@ -1063,7 +1028,6 @@ button:disabled {
   }
 }
 
-/* Присутствие в школе */
 .presence-panel {
   margin-top: 18px;
   padding-top: 10px;
@@ -1183,8 +1147,6 @@ button:disabled {
   }
 }
 
-
-/* Вызовы учителя */
 .person-row-with-action {
   display: flex;
   align-items: center;
@@ -1229,7 +1191,6 @@ button:disabled {
 .call-acknowledged { color: #15803d; }
 .theme-toggle-btn, .calls-open-btn { white-space: nowrap; }
 
-/* Тёмная тема: переключается атрибутом data-theme на html */
 :root[data-theme="dark"] {
   color-scheme: dark;
   color: #e5e7eb;
@@ -1321,8 +1282,6 @@ button:disabled {
   .theme-toggle-btn, .calls-open-btn { flex: 1; }
 }
 
-
-/* Счётчики непрочитанных сообщений и отметки прочтения */
 .person-item .person-name {
   flex: 1;
 }
@@ -1358,8 +1317,6 @@ button:disabled {
   color: #91b7ff;
 }
 
-
-/* Видео в сообщениях */
 .message-video {
   display: block;
   width: min(100%, 420px);
@@ -1368,12 +1325,6 @@ button:disabled {
   border-radius: 12px;
   background: #111827;
 }
-
-/* =====================================================
-   VA CHAT — адаптивный полноэкранный интерфейс
-   Визуальный стиль: аккуратный мессенджер, вдохновлённый
-   привычной компоновкой Telegram (без копирования бренда).
-   ===================================================== */
 
 :root {
   --va-blue: #2481cc;
@@ -1415,7 +1366,6 @@ body {
   overflow: hidden;
 }
 
-/* Экран входа остаётся компактным и центрированным */
 #app > .auth-card {
   align-self: center;
   margin: 20px auto;
@@ -1423,7 +1373,6 @@ body {
   overflow-y: auto;
 }
 
-/* Полноэкранная рабочая область на ПК и телефонах */
 .messenger {
   width: 100%;
   max-width: none;
@@ -1688,7 +1637,6 @@ body {
   background: #fff;
 }
 
-/* Модальные окна не выходят за экран */
 .va-modal-overlay { padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
 .va-modal {
   width: min(100%, 540px);
@@ -1698,13 +1646,11 @@ body {
 }
 .va-modal-body { min-height: 0; overflow-x: hidden; }
 
-/* Аккуратные полосы прокрутки */
 * { scrollbar-width: thin; scrollbar-color: #c4d1db transparent; }
 *::-webkit-scrollbar { width: 7px; height: 7px; }
 *::-webkit-scrollbar-thumb { border-radius: 20px; background: #c4d1db; }
 *::-webkit-scrollbar-track { background: transparent; }
 
-/* Тёмная тема в той же компоновке */
 :root[data-theme="dark"] {
   --va-page: #0e1722;
   --va-border: #263747;
@@ -1754,7 +1700,6 @@ body {
 :root[data-theme="dark"] .teacher-call-card { background: #1b2c39; border-color: #304657; }
 :root[data-theme="dark"] * { scrollbar-color: #40576a transparent; }
 
-/* Планшеты и телефоны */
 @media (max-width: 760px) {
   body { overflow: hidden; }
   .topbar {
@@ -1851,7 +1796,6 @@ body {
   .topbar { min-height: 50px; }
 }
 
-/* Мобильная навигация VA Chat: список диалогов и диалог по очереди */
 .mobile-back-btn { display: none; }
 .chat-heading-title { min-width: 0; flex: 1 1 auto; }
 @media (max-width: 760px) {
@@ -1931,4 +1875,35 @@ body {
   .attach-btn { width: 42px; min-width: 42px; height: 42px; border-radius: 50%; }
   .send-btn { min-height: 42px; border-radius: 18px; }
   .status-line { flex: 0 0 auto; }
+}
+
+.message-video-wrap {
+  width: min(100%, 460px);
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.message-video-load {
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid var(--va-border, #dce2ec);
+  border-radius: 11px;
+  background: var(--va-blue-soft, #e8f3fc);
+  color: var(--va-blue-strong, #1976c9);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.message-video-load:disabled {
+  opacity: .7;
+  cursor: wait;
+}
+.message-video-wrap .message-video {
+  display: block;
+  width: 100%;
+  max-height: 380px;
+  margin-top: 0;
+  border-radius: 12px;
+  background: #111827;
 }

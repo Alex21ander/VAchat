@@ -39,7 +39,7 @@
         <div class="field">
           <label for="username">Имя пользователя</label>
           <input id="username" required minlength="3" maxlength="24"
-            pattern="[A-Za-zА-Яа-яЁё0-9_-]{3,24}"
+            pattern="[A-Za-zА-Яа-яЁё0-9_\x2D]{3,24}"
             placeholder="Например, Иван5" autocomplete="username">
           <small>Без пробелов. Можно использовать буквы и цифры.</small>
         </div>
@@ -82,8 +82,6 @@
   </main>
 
   <script>
-    // Основной CDN + резервный CDN. Приложение запускается только
-    // после успешной загрузки Supabase SDK.
     (function loadSupabaseSdk() {
       const sources = [
         "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2",
@@ -116,7 +114,7 @@
           appScript.src = "script.js";
           appScript.onerror = () => {
             status.className = "message error";
-            status.textContent = "Не удалось загрузить файлы VA Chat. Обнови страницу или проверь размещение script.js.";
+            status.textContent = "Не удалось загрузить файлы VA Chat.";
             document.querySelector(".auth-card")?.append(status);
           };
           document.body.append(appScript);

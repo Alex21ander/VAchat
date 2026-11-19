@@ -33,10 +33,6 @@ let currentClass = null;
 let realtimeChannel = null;
 let presenceRefreshTimer = null;
 
-// ======================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-// ======================================
-
 function makeElement(tag, className = "", text = "") {
   const element = document.createElement(tag);
 
@@ -114,14 +110,10 @@ function usernameEmail(name) {
     );
   }
 
-  // Для латинских имён сохраняем прежний адрес, чтобы старые аккаунты
-  // продолжали входить без изменений.
   if (/^[a-z0-9_-]+$/.test(normalized)) {
     return normalized + "@vachat.example.com";
   }
 
-  // Кириллическое имя кодируем в безопасный ASCII-адрес.
-  // Отдельный домен исключает пересечение с прежними латинскими аккаунтами.
   const bytes = new TextEncoder().encode(normalized);
   let binary = "";
 
@@ -148,14 +140,6 @@ function readableError(error) {
     return "Это имя уже зарегистрировано. Попробуй войти.";
   }
 
-  if (/email not confirmed/i.test(text)) {
-    return "Подтверди email или отключи обязательное подтверждение для тестового проекта.";
-  }
-
-  if (/row-level security|permission denied/i.test(text)) {
-    return "Supabase запретил это действие. Проверь SQL-политики и права доступа.";
-  }
-
   return text;
 }
 
@@ -172,10 +156,6 @@ function initials(name) {
   return (name || "?").trim().slice(0, 1).toUpperCase();
 }
 
-// ======================================
-// ТЕМА ОФОРМЛЕНИЯ
-// ======================================
-
 function getSavedTheme() {
   return localStorage.getItem("vachat_theme") === "dark" ? "dark" : "light";
 }
@@ -186,10 +166,6 @@ function applyTheme(theme) {
 }
 
 applyTheme(getSavedTheme());
-
-// ======================================
-// МОДАЛЬНЫЕ ОКНА
-// ======================================
 
 function openModal(title, content, buttons = []) {
   const overlay = makeElement("div", "va-modal-overlay");
@@ -248,10 +224,6 @@ function openModal(title, content, buttons = []) {
   };
 }
 
-// ======================================
-// РАБОТА С ИЗОБРАЖЕНИЯМИ
-// ======================================
-
 function chooseImage() {
   return new Promise(resolve => {
     const input = document.createElement("input");
@@ -272,8 +244,6 @@ function chooseImage() {
   });
 }
 
-// В чатах можно отправлять изображения и видео. Для аватарок
-// по-прежнему используется отдельная функция uploadImage.
 function chooseChatMedia() {
   return new Promise(resolve => {
     const input = document.createElement("input");
@@ -294,10 +264,6 @@ function chooseChatMedia() {
 
 async function uploadImage(file, folder) {
   if (!file) return null;
-
-  if (!file.type.startsWith("image/")) {
-    throw new Error("Можно загружать только изображения.");
-  }
 
   if (file.size > 5 * 1024 * 1024) {
     throw new Error("Изображение должно быть не больше 5 МБ.");
@@ -346,7 +312,7 @@ async function uploadChatMedia(file, folder) {
   const { error } = await db.storage
     .from("chat-media")
     .upload(path, file, {
-      cacheControl: "3600",
+      cacheControl: "31536000",
       upsert: false,
       contentType: file.type
     });
@@ -359,8 +325,80 @@ function isVideoMedia(path) {
   return /\.(mp4|webm|mov|m4v|ogv)$/i.test(path || "");
 }
 
-// Кэшируем подписанные ссылки, чтобы при каждом обновлении списка
-// не запрашивать одни и те же аватары повторно.
+function createLazyVideo(path) {
+  const wrap = makeElement("div", "message-video-wrap");
+
+  wrap.style.width = "min(100%, 420px)";
+  wrap.style.aspectRatio = "16 / 9";
+  wrap.style.minHeight = "150px";
+  wrap.style.maxHeight = "360px";
+  wrap.style.background = "#111827";
+  wrap.style.borderRadius = "12px";
+  wrap.style.overflow = "hidden";
+
+  const loadButton = makeButton("▶ Загрузить видео", "message-video-load", async () => {
+    if (loadButton.disabled) return;
+    loadButton.disabled = true;
+    loadButton.textContent = "Получаем видео…";
+
+    try {
+      const url = await getImageUrl(path);
+      if (!url) throw new Error("Supabase не выдал ссылку на видео.");
+
+      const video = makeElement("video", "message-video");
+      video.controls = true;
+      video.playsInline = true;
+      video.preload = "metadata";
+      video.setAttribute("aria-label", "Видео в сообщении");
+      video.style.width = "100%";
+      video.style.height = "100%";
+      video.style.maxHeight = "360px";
+      video.style.objectFit = "contain";
+
+      video.addEventListener("error", () => {
+        if (!wrap.isConnected) return;
+        const code = video.error?.code;
+        const detail = code === 4
+          ? "Формат или кодек видео не поддерживается этим браузером."
+          : code === 2
+            ? "Сеть прервала загрузку видео."
+            : "Браузер не смог открыть видео.";
+        const panel = makeElement("div", "message-video-error", detail);
+        panel.style.padding = "12px";
+        panel.style.color = "#fff";
+        const retry = makeButton("Повторить", "message-video-load", () => {
+          imageUrlCache.delete(path);
+          wrap.replaceChildren(createLazyVideo(path));
+        });
+        const open = makeButton("Открыть отдельно", "message-video-load", () => {
+          window.open(url, "_blank", "noopener,noreferrer");
+        });
+        panel.append(retry, open);
+        wrap.replaceChildren(panel);
+        console.warn("Ошибка воспроизведения видео", { path, code, message: video.error?.message });
+      }, { once: true });
+
+      video.addEventListener("loadedmetadata", () => {
+        if (!wrap.isConnected) return;
+        wrap.style.aspectRatio = video.videoWidth && video.videoHeight
+          ? `${video.videoWidth} / ${video.videoHeight}`
+          : "16 / 9";
+      }, { once: true });
+
+      wrap.replaceChildren(video);
+      video.src = url;
+      video.load();
+    } catch (error) {
+      loadButton.disabled = false;
+      loadButton.textContent = "Повторить загрузку видео";
+      console.warn("Ошибка загрузки видео:", error?.message || error);
+    }
+  });
+
+  wrap.append(loadButton);
+  return wrap;
+}
+
 const imageUrlCache = new Map();
 const IMAGE_URL_CACHE_MS = 50 * 60 * 1000;
 async function getImageUrl(path) {
@@ -440,10 +478,6 @@ async function changeAvatar() {
     );
   }
 }
-
-// ======================================
-// РЕГИСТРАЦИЯ И ВХОД
-// ======================================
 
 authForm.addEventListener("submit", async event => {
   event.preventDefault();
@@ -560,10 +594,6 @@ authForm.addEventListener("submit", async event => {
     setBusy(false);
   }
 });
-
-// ======================================
-// ОСНОВНОЙ ИНТЕРФЕЙС
-// ======================================
 
 async function showMessenger() {
   if (presenceRefreshTimer) {
@@ -689,10 +719,6 @@ async function showMessenger() {
   let presenceRows = [];
   let presencePanel = null;
 
-  // --------------------------------------
-  // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ИНТЕРФЕЙСА
-  // --------------------------------------
-
   function setActiveTab(which) {
     classTab.classList.toggle("active", which === "class");
     personalTab.classList.toggle("active", which === "personal");
@@ -701,8 +727,6 @@ async function showMessenger() {
   function setHeading(title, subtitle, extra = null) {
     heading.replaceChildren();
 
-    // На телефоне открытый диалог занимает весь экран; кнопка возвращает
-    // к списку чатов, как в мобильных мессенджерах.
     if (layout.classList.contains("mobile-chat-open")) {
       heading.append(makeButton("‹", "mobile-back-btn", showMobileChatList));
     }
@@ -990,7 +1014,7 @@ async function showMessenger() {
 
               if (data !== true) {
                 throw new Error(
-                  "Supabase не подтвердил изменение. Проверь SQL-функцию acknowledge_teacher_call."
+                  "Изменение не подтверждено."
                 );
               }
 
@@ -1025,7 +1049,6 @@ async function showMessenger() {
       makeElement("h2", "", activeMode === "personal" ? "Одноклассники" : "Мои чаты")
     );
 
-    // Загружаем все счётчики параллельно, а не по одному для каждого чата.
     const unreadKeys = activeMode === "personal"
       ? classmates.map(person => ["private", currentClass.id, person.id, `private:${person.id}`])
       : [["class", currentClass.id, null, `class:${currentClass.id}`],
@@ -1119,8 +1142,6 @@ async function showMessenger() {
     sidebar.replaceChildren(sidebarContent);
   }
 
-
-  // Не допускаем параллельные перерисовки: повторные запросы объединяются.
   let sidebarRefreshPromise = null;
   let sidebarRefreshPending = false;
   async function refreshSidebar() {
@@ -1140,10 +1161,6 @@ async function showMessenger() {
       sidebarRefreshPromise = null;
     }
   }
-
-  // --------------------------------------
-  // ЗАГРУЗКА СПИСКОВ
-  // --------------------------------------
 
   async function loadClassmates() {
     const { data: memberships, error } = await db
@@ -1186,10 +1203,6 @@ async function showMessenger() {
 
     customChats = data || [];
   }
-
-  // --------------------------------------
-  // НЕПРОЧИТАННЫЕ СООБЩЕНИЯ И ПРОЧТЕНИЕ
-  // --------------------------------------
 
   async function getChatReadAt(type, chatId, peerId = null) {
     const { data, error } = await db.rpc("vachat_get_other_read_at", {
@@ -1267,11 +1280,10 @@ async function showMessenger() {
     scheduleSidebarRefresh();
   }
 
-  // --------------------------------------
-  // ОТОБРАЖЕНИЕ СООБЩЕНИЙ
-  // --------------------------------------
-
   async function renderMessages(rows, kind) {
+    const previousScrollTop = messages.scrollTop;
+    const wasNearBottom =
+      messages.scrollHeight - messages.scrollTop - messages.clientHeight < 120;
     let otherReadAt = null;
     if (kind === "class") {
       otherReadAt = await getChatReadAt("class", currentClass.id);
@@ -1332,35 +1344,27 @@ async function showMessenger() {
       }
 
       if (item.image_path) {
-        const url = await getImageUrl(item.image_path);
-
-        if (url && isVideoMedia(item.image_path)) {
-          const video = makeElement("video", "message-video");
-          video.src = url;
-          video.controls = true;
-          video.playsInline = true;
-          video.preload = "metadata";
-          video.setAttribute("aria-label", "Видео в сообщении");
-          bubble.append(video);
-        } else if (url) {
-          const img = makeElement("img", "message-image");
-          img.src = url;
-          img.alt = "Изображение в сообщении";
-          img.loading = "lazy";
-
-          img.addEventListener("click", () => {
-            window.open(url, "_blank", "noopener");
-          });
-
-          bubble.append(img);
+        if (isVideoMedia(item.image_path)) {
+          bubble.append(createLazyVideo(item.image_path));
         } else {
-          bubble.append(
-            makeElement(
-              "p",
-              "message-image-error",
-              "Не удалось загрузить файл."
-            )
-          );
+          const url = await getImageUrl(item.image_path);
+          if (url) {
+            const img = makeElement("img", "message-image");
+            img.src = url;
+            img.alt = "Изображение в сообщении";
+            img.loading = "lazy";
+            img.decoding = "async";
+
+            img.addEventListener("click", () => {
+              window.open(url, "_blank", "noopener");
+            });
+
+            bubble.append(img);
+          } else {
+            bubble.append(
+              makeElement("p", "message-image-error", "Не удалось загрузить файл.")
+            );
+          }
         }
       }
 
@@ -1394,7 +1398,11 @@ async function showMessenger() {
     }
 
     messages.replaceChildren(fragment);
-    messages.scrollTop = messages.scrollHeight;
+    if (wasNearBottom) {
+      messages.scrollTop = messages.scrollHeight;
+    } else {
+      messages.scrollTop = previousScrollTop;
+    }
   }
 
   async function loadClassMessages() {
@@ -1464,10 +1472,6 @@ async function showMessenger() {
       "Групповой чат · " + selectedGroup.name;
     await refreshUnreadBadges();
   }
-
-  // --------------------------------------
-  // ОТКРЫТИЕ ЧАТОВ
-  // --------------------------------------
 
   async function openClassChat() {
     selectedPerson = null;
@@ -1571,10 +1575,6 @@ async function showMessenger() {
       }
     }
   }
-
-  // --------------------------------------
-  // СОЗДАНИЕ ГРУППЫ
-  // --------------------------------------
 
   async function createCustomChat() {
     try {
@@ -1701,10 +1701,6 @@ async function showMessenger() {
     }
   }
 
-  // --------------------------------------
-  // УЧАСТНИКИ ГРУППЫ
-  // --------------------------------------
-
   async function getGroupProfiles() {
     const { data, error } = await db.rpc(
       "get_custom_chat_members",
@@ -1761,10 +1757,6 @@ async function showMessenger() {
         "Не удалось загрузить участников: " + readableError(error);
     }
   }
-
-  // --------------------------------------
-  // УПРАВЛЕНИЕ УЧАСТНИКАМИ
-  // --------------------------------------
 
   async function manageGroupMembers() {
     if (
@@ -1888,10 +1880,6 @@ async function showMessenger() {
     }
   }
 
-  // --------------------------------------
-  // НАСТРОЙКИ ГРУППЫ
-  // --------------------------------------
-
   async function groupSettings() {
     if (
       !selectedGroup ||
@@ -2001,10 +1989,6 @@ async function showMessenger() {
     ]);
   }
 
-  // --------------------------------------
-  // УДАЛЕНИЕ СООБЩЕНИЙ
-  // --------------------------------------
-
   async function deleteMessage(id, kind) {
     if (!confirm("Удалить это сообщение?")) return;
 
@@ -2033,10 +2017,6 @@ async function showMessenger() {
       await loadGroupMessages();
     }
   }
-
-  // --------------------------------------
-  // ОТПРАВКА СООБЩЕНИЙ И КАРТИНОК
-  // --------------------------------------
 
   composer.addEventListener("submit", async event => {
     event.preventDefault();
@@ -2141,11 +2121,6 @@ async function showMessenger() {
     }
   });
 
-  // --------------------------------------
-  // ПЕРВОНАЧАЛЬНАЯ ЗАГРУЗКА
-  // --------------------------------------
-
-  // Эти три запроса независимы — выполняем одновременно, а не цепочкой.
   await Promise.all([
     loadClassmates(),
     loadCustomChats(),
@@ -2162,15 +2137,9 @@ async function showMessenger() {
     await loadClassMessages();
   }
 
-  // Если страница остаётся открытой через полночь,
-  // вчерашняя отметка автоматически отображается как «Не в школе».
   presenceRefreshTimer = setInterval(() => {
     renderPresencePanel();
   }, 60 * 1000);
-
-  // --------------------------------------
-  // ОБНОВЛЕНИЯ В РЕАЛЬНОМ ВРЕМЕНИ
-  // --------------------------------------
 
   realtimeChannel = db
     .channel("va-chat-" + currentClass.id + "-" + currentUser.id)
@@ -2319,10 +2288,6 @@ async function showMessenger() {
     });
 }
 
-// ======================================
-// ВЫХОД ИЗ АККАУНТА
-// ======================================
-
 async function logout() {
   if (presenceRefreshTimer) {
     clearInterval(presenceRefreshTimer);
@@ -2344,10 +2309,6 @@ async function logout() {
 
   location.reload();
 }
-
-// ======================================
-// ВОССТАНОВЛЕНИЕ СЕССИИ
-// ======================================
 
 async function init() {
   try {
