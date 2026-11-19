@@ -11,7 +11,8 @@
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="session-checking">
+  <div id="sessionLoading" role="status" aria-live="polite">Загрузка VA Chat…</div>
   <main id="app">
     <section class="auth-card">
       <div class="logo">💬</div>
@@ -96,8 +97,10 @@
 
       function loadSdk(index) {
         if (index >= sources.length) {
+          document.body.classList.remove("session-checking");
           status.className = "message error";
           status.textContent = "Не удалось загрузить библиотеку чата. Проверь подключение к интернету и обнови страницу.";
+          document.querySelector("#sessionLoading")?.remove();
           return;
         }
         const script = document.createElement("script");
@@ -110,11 +113,14 @@
             return;
           }
           status.remove();
+          document.querySelector("#sessionLoading")?.remove();
           const appScript = document.createElement("script");
           appScript.src = "script.js";
           appScript.onerror = () => {
             status.className = "message error";
-            status.textContent = "Не удалось загрузить файлы VA Chat.";
+            status.textContent = "Не удалось загрузить файлы VA Chat. Обнови страницу или проверь размещение script.js.";
+            document.body.classList.remove("session-checking");
+            document.querySelector("#sessionLoading")?.remove();
             document.querySelector(".auth-card")?.append(status);
           };
           document.body.append(appScript);

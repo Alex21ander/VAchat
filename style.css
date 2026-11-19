@@ -1907,3 +1907,14 @@ body {
   border-radius: 12px;
   background: #111827;
 }
+
+body.session-checking #app { visibility: hidden; }
+#sessionLoading { display: none; }
+body.session-checking #sessionLoading {
+  position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center;
+  padding: 24px; color: #2481cc; background: #eef2ff;
+  font: 600 16px Arial, sans-serif;
+}
+:root[data-theme="dark"] body.session-checking #sessionLoading {
+  color: #91b7ff; background: #101827;
+}

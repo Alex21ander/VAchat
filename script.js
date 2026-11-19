@@ -140,6 +140,14 @@ function readableError(error) {
     return "Это имя уже зарегистрировано. Попробуй войти.";
   }
 
+  if (/email not confirmed/i.test(text)) {
+    return "Подтверди email или отключи обязательное подтверждение для тестового проекта.";
+  }
+
+  if (/row-level security|permission denied/i.test(text)) {
+    return "Supabase запретил это действие. Проверь SQL-политики и права доступа.";
+  }
+
   return text;
 }
 
@@ -265,6 +273,10 @@ function chooseChatMedia() {
 async function uploadImage(file, folder) {
   if (!file) return null;
 
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Можно загружать только изображения.");
+  }
+
   if (file.size > 5 * 1024 * 1024) {
     throw new Error("Изображение должно быть не больше 5 МБ.");
   }
@@ -327,7 +339,6 @@ function isVideoMedia(path) {
 
 function createLazyVideo(path) {
   const wrap = makeElement("div", "message-video-wrap");
-
   wrap.style.width = "min(100%, 420px)";
   wrap.style.aspectRatio = "16 / 9";
   wrap.style.minHeight = "150px";
@@ -726,7 +737,6 @@ async function showMessenger() {
 
   function setHeading(title, subtitle, extra = null) {
     heading.replaceChildren();
-
     if (layout.classList.contains("mobile-chat-open")) {
       heading.append(makeButton("‹", "mobile-back-btn", showMobileChatList));
     }
@@ -1014,7 +1024,7 @@ async function showMessenger() {
 
               if (data !== true) {
                 throw new Error(
-                  "Изменение не подтверждено."
+                  "Supabase не подтвердил изменение. Проверь SQL-функцию acknowledge_teacher_call."
                 );
               }
 
@@ -1141,6 +1151,7 @@ async function showMessenger() {
     renderPresencePanel();
     sidebar.replaceChildren(sidebarContent);
   }
+
 
   let sidebarRefreshPromise = null;
   let sidebarRefreshPending = false;
@@ -2326,10 +2337,9 @@ async function init() {
       .single();
 
     if (profileError) throw profileError;
-
     currentProfile = profile;
-
-    const savedClassId = localStorage.getItem("vachat_class_id");
+    let savedClassId = localStorage.getItem("vachat_class_id");
+    let savedClass = null;
 
     if (savedClassId) {
       const { data: membership, error: membershipError } = await db
@@ -2338,46 +2348,56 @@ async function init() {
         .eq("class_id", savedClassId)
         .eq("user_id", currentUser.id)
         .maybeSingle();
-
       if (membershipError) throw membershipError;
 
       if (membership) {
-        const { data: savedClass, error: classError } = await db
+        const { data, error: classError } = await db
           .from("classes")
           .select("id, name")
           .eq("id", savedClassId)
           .single();
-
         if (classError) throw classError;
-
-        currentClass = {
-          id: savedClass.id,
-          name: savedClass.name
-        };
-
-        await showMessenger();
-        return;
+        savedClass = data;
       }
-
-      localStorage.removeItem("vachat_class_id");
     }
 
-    app.replaceChildren(authForm.closest(".auth-card"));
+    if (!savedClass) {
+      const { data: memberships, error: membershipsError } = await db
+        .from("class_members")
+        .select("class_id")
+        .eq("user_id", currentUser.id)
+        .limit(1);
+      if (membershipsError) throw membershipsError;
 
-    className.value = "";
-    classPassword.value = "";
+      const firstClassId = memberships?.[0]?.class_id;
+      if (firstClassId) {
+        const { data, error: classError } = await db
+          .from("classes")
+          .select("id, name")
+          .eq("id", firstClassId)
+          .single();
+        if (classError) throw classError;
+        savedClass = data;
+      }
+    }
+
+    if (savedClass) {
+      currentClass = { id: savedClass.id, name: savedClass.name };
+      localStorage.setItem("vachat_class_id", savedClass.id);
+      await showMessenger();
+      return;
+    }
+
     username.value = profile.username;
     role.value = profile.role;
-
     setMode("login");
-
-    showMessage(
-      "Ты уже вошёл в аккаунт. Введи название класса и пароль, чтобы открыть чат.",
-      "success"
-    );
-
+    showMessage("Аккаунт найден, но класс не выбран. Введи название класса и пароль, чтобы присоединиться.", "success");
   } catch (error) {
+    console.error("Ошибка восстановления сессии VA Chat:", error);
     showMessage(readableError(error), "error");
+  } finally {
+    document.body.classList.remove("session-checking");
+    document.querySelector("#sessionLoading")?.remove();
   }
 }
 
